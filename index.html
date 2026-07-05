@@ -304,22 +304,22 @@
                     </p>
                 </div>
 
-                <!-- Config Share Link Generator -->
+                <!-- Share Link Generator -->
                 <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
-                    <label>Share Config Link</label>
+                    <label>Invite Roommates</label>
                     <p style="font-size: 0.725rem; color: var(--text-muted); margin-bottom: 0.5rem;">
-                        Click generate to create an onboarding link. Sharing it with your roommates configures their devices instantly!
+                        Generate a shareable invite link. Your roommates open it once to sync their device — no login needed!
                     </p>
                     <button type="button" class="btn btn-secondary btn-sm" id="btn-generate-share-link">
-                        <i data-lucide="share-2" style="width: 14px; height: 14px;"></i> Generate Share URL
+                        <i data-lucide="share-2" style="width: 14px; height: 14px;"></i> Generate Invite Link
                     </button>
-                    
+
                     <div id="share-link-container" style="display: none; margin-top: 0.75rem;">
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <input type="text" class="form-control form-control-sm" id="share-link-input" readonly>
+                            <input type="text" class="form-control form-control-sm" id="share-link-input" readonly placeholder="Generating...">
                             <button type="button" class="btn btn-primary btn-sm" id="btn-copy-share-link" style="padding: 0.45rem 0.8rem; font-size: 0.75rem;">Copy</button>
                         </div>
-                        <p style="font-size: 0.725rem; color: var(--accent-green); margin-top: 0.25rem; font-weight: 600;">Link created! Copy and send to your roommates.</p>
+                        <p style="font-size: 0.725rem; color: var(--accent-green); margin-top: 0.4rem; font-weight: 600;">✅ Send this link to your roommates to onboard them!</p>
                     </div>
                 </div>
 

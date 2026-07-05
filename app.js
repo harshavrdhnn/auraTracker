@@ -37,7 +37,8 @@ let firebaseSyncRef = null;
 // DOM loaded entrypoint
 document.addEventListener("DOMContentLoaded", () => {
     loadData();
-    checkUrlHashConfig();
+    checkUrlHashConfig();   // legacy #config= support
+    checkInviteCode();      // new ?invite=CODE support
     initFirebase();
     initEventListeners();
     renderAll();
@@ -1495,56 +1496,44 @@ function handleSaveSettings(e) {
 
 // Onboarding config url link generation
 async function handleGenerateShareLink() {
-    const configData = {
-        roommates: state.roommates,
-        settings: state.settings
-    };
+    const btn = document.getElementById("btn-generate-share-link");
+    const container = document.getElementById("share-link-container");
+    const input = document.getElementById("share-link-input");
+    const codeDisplay = document.getElementById("invite-code-display");
 
+    // Build the full base64 config URL
+    const configData = { roommates: state.roommates, settings: state.settings };
+    const base64Str = btoa(JSON.stringify(configData));
+    const origin = window.location.origin + window.location.pathname;
+    const fullUrl = `${origin}#config=${base64Str}`;
+
+    // Show loading state
+    input.value = "⏳ Generating link...";
+    input.disabled = true;
+    if (btn) btn.disabled = true;
+    if (codeDisplay) codeDisplay.style.display = "none";
+    container.style.display = "block";
+
+    // Try TinyURL (works on public domains; fails silently on localhost)
+    let shortUrl = null;
     try {
-        const jsonStr = JSON.stringify(configData);
-        const base64Str = btoa(jsonStr);
-        const origin = window.location.origin + window.location.pathname;
-        const fullUrl = `${origin}#config=${base64Str}`;
-
-        const input = document.getElementById("share-link-input");
-        const container = document.getElementById("share-link-container");
-        const btn = document.getElementById("btn-generate-share-link");
-
-        // Show container with loading state
-        input.value = "⏳ Generating short link...";
-        input.disabled = true;
-        if (btn) btn.disabled = true;
-        container.style.display = "block";
-
-        // Try TinyURL free API (no key needed, uses CORS proxy)
-        let shortUrl = null;
-        try {
-            const proxyUrl = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(fullUrl)}`;
-            const resp = await fetch(proxyUrl);
-            if (resp.ok) {
-                const text = await resp.text();
-                if (text.startsWith("https://tinyurl.com/")) {
-                    shortUrl = text.trim();
-                }
-            }
-        } catch (e) {
-            console.warn("TinyURL failed, using full URL:", e);
+        const resp = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(fullUrl)}`);
+        if (resp.ok) {
+            const text = await resp.text();
+            if (text.startsWith("https://tinyurl.com/")) shortUrl = text.trim();
         }
-
-        // Fall back to full URL if shortening failed
-        input.value = shortUrl || fullUrl;
-        input.disabled = false;
-        if (btn) btn.disabled = false;
-
-        if (shortUrl) {
-            showToast("🔗 Short invite link ready!", "success");
-        } else {
-            showToast("Link generated (shortening unavailable — full URL used).", "success");
-        }
-
     } catch (e) {
-        console.error("Link generation failed:", e);
-        showToast("Failed to generate link.", "error");
+        console.warn("TinyURL unavailable:", e);
+    }
+
+    input.value = shortUrl || fullUrl;
+    input.disabled = false;
+    if (btn) btn.disabled = false;
+
+    if (shortUrl) {
+        showToast("🔗 Short invite link ready!", "success");
+    } else {
+        showToast("Link ready! (Short URLs work after hosting on GitHub Pages)", "success");
     }
 }
 
@@ -1552,13 +1541,73 @@ function copyShareLinkToClipboard() {
     const input = document.getElementById("share-link-input");
     input.select();
     input.setSelectionRange(0, 99999);
-    
     navigator.clipboard.writeText(input.value).then(() => {
-        showToast("Invite link copied to clipboard! 📋", "success");
-    }).catch(err => {
-        console.error("Clipboard copy failed:", err);
+        showToast("Invite link copied! 📋 Send it to your roommates.", "success");
+    }).catch(() => {
         showToast("Failed to auto-copy. Select and copy manually.", "error");
     });
+}
+
+// Check for ?invite=CODE in URL on page load
+async function checkInviteCode() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("invite");
+    if (!code) return;
+
+    // Clear the ?invite= param from URL bar immediately
+    const cleanUrl = window.location.origin + window.location.pathname;
+    history.replaceState(null, "", cleanUrl);
+
+    showToast(`⏳ Loading invite code: ${code}...`, "success");
+
+    // We need Firebase to fetch the invite — but Firebase isn't connected yet.
+    // Use the REST API directly to fetch the invite without needing full init.
+    try {
+        // Try fetching from all known Firebase projects (stored in localStorage)
+        const settingsSaved = localStorage.getItem("aura_settings_v1");
+        let databaseURL = null;
+
+        if (settingsSaved) {
+            const s = JSON.parse(settingsSaved);
+            const cfg = parseFirebaseConfig(s.firebaseConfig);
+            if (cfg && cfg.databaseURL) databaseURL = cfg.databaseURL;
+        }
+
+        if (!databaseURL) {
+            showToast(`Enter your Firebase config in Settings first, then open the invite link again.`, "error");
+            return;
+        }
+
+        const resp = await fetch(`${databaseURL}/aura_tracker_invites/${code}.json`);
+        const data = await resp.json();
+
+        if (!data) {
+            showToast(`Invite code "${code}" not found or expired.`, "error");
+            return;
+        }
+
+        if (data.expiresAt && Date.now() > data.expiresAt) {
+            showToast(`Invite code "${code}" has expired. Ask your roommate for a new one.`, "error");
+            return;
+        }
+
+        // Apply the invite config
+        state.roommates = data.roommates || [];
+        state.settings = data.settings || state.settings;
+        state.currentUser = "";
+        saveToLocalStorage();
+
+        showToast("✅ Workspace synced from invite! Choose your identity.", "success");
+        initFirebase();
+        renderAll();
+
+        // Prompt identity selection
+        setTimeout(() => openIdentityModal(), 600);
+
+    } catch (e) {
+        console.error("Failed to load invite:", e);
+        showToast("Failed to load invite. Check your internet connection.", "error");
+    }
 }
 
 // -------------------------------------------------------------
