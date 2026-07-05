@@ -105,6 +105,32 @@ function pushToFirebase() {
     }
 }
 
+// Tolerant Firebase config parser — handles JS object literals from Firebase console
+function parseFirebaseConfig(raw) {
+    if (!raw) return null;
+    let str = raw.trim();
+
+    // Strip "const firebaseConfig = " or "var firebaseConfig = " prefix
+    str = str.replace(/^(const|var|let)\s+\w+\s*=\s*/, "");
+
+    // Strip trailing semicolon
+    str = str.replace(/;$/, "").trim();
+
+    // First try strict JSON parse
+    try {
+        return JSON.parse(str);
+    } catch (_) {}
+
+    // Fall back: use Function constructor to evaluate JS object literal safely
+    try {
+        // eslint-disable-next-line no-new-func
+        const result = new Function("return " + str)();
+        if (result && typeof result === "object") return result;
+    } catch (_) {}
+
+    return null;
+}
+
 // Initialize Firebase Database Connections
 function initFirebase() {
     const configStr = state.settings.firebaseConfig;
@@ -116,39 +142,98 @@ function initFirebase() {
         firebaseSyncRef = null;
     }
 
-    if (!configStr || !syncKey) {
-        console.log("Firebase sync configuration not complete. Running offline mode.");
+    if (!configStr) {
+        console.log("Firebase config not set. Running offline mode.");
         return;
     }
 
+    // Use passcode as sync path, fallback to project ID derived from config
+    let resolvedSyncKey = syncKey;
+    if (!resolvedSyncKey) {
+        const tempConfig = parseFirebaseConfig(configStr);
+        resolvedSyncKey = (tempConfig && tempConfig.projectId) ? tempConfig.projectId : "default";
+    }
+
     try {
-        const config = JSON.parse(configStr);
+        // Parse config — tolerant of JS object literal format from Firebase console
+        // (unquoted keys, trailing commas, or with "const firebaseConfig = " prefix)
+        const config = parseFirebaseConfig(configStr);
+
+        if (!config) {
+            showToast("Firebase config JSON is invalid. Paste just the { } block.", "error");
+            return;
+        }
+
+        if (!config.databaseURL) {
+            showToast("Firebase config is missing 'databaseURL'. Please check your config JSON.", "error");
+            return;
+        }
+
         if (typeof firebase !== 'undefined') {
-            // Check if app is already initialized
-            if (firebase.apps.length === 0) {
+            // Always delete existing apps and re-init cleanly to avoid stale connections
+            const deleteExisting = firebase.apps.length > 0
+                ? firebase.app().delete()
+                : Promise.resolve();
+
+            deleteExisting.then(() => {
                 firebaseApp = firebase.initializeApp(config);
-            } else {
-                firebaseApp = firebase.app();
-            }
-            firebaseDb = firebase.database();
-            
-            // Set up listener
-            firebaseSyncRef = firebaseDb.ref(`aura_tracker/${syncKey}`);
-            firebaseSyncRef.on('value', (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    console.log("Received remote sync payload from Firebase RTDB");
-                    state.roommates = data.roommates || state.roommates;
-                    state.transactions = data.transactions || [];
-                    saveToLocalStorage();
-                    renderAll();
+                setupFirebaseListener(resolvedSyncKey, firebaseApp);
+            }).catch(err => {
+                console.warn("Error deleting previous Firebase app:", err);
+                // Try initializing anyway
+                try {
+                    firebaseApp = firebase.initializeApp(config);
+                } catch(_) {
+                    firebaseApp = firebase.app();
                 }
+                setupFirebaseListener(resolvedSyncKey, firebaseApp);
             });
-            console.log("Firebase successfully connected and synced!");
+        } else {
+            showToast("Firebase SDK not loaded. Check your internet connection.", "error");
         }
     } catch (e) {
         console.error("Firebase initialization failed:", e);
-        showToast("Firebase initialization failed. Verify JSON config.", "error");
+        showToast("Firebase config JSON is invalid. Please verify it.", "error");
+    }
+}
+
+function setupFirebaseListener(syncKey, app) {
+    try {
+        // Pass app instance explicitly so regional databaseURL is used
+        firebaseDb = firebase.database(app);
+        firebaseSyncRef = firebaseDb.ref(`aura_tracker/${syncKey}`);
+
+        firebaseSyncRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+
+            if (data === null) {
+                // Firebase path is completely empty (never initialized).
+                // Seed it with local data so other devices can pull.
+                if (state.transactions.length > 0 || state.roommates.length > 0) {
+                    console.log("Firebase path is new — seeding with local data...");
+                    pushToFirebase();
+                }
+                return;
+            }
+
+            // Firebase has data — always treat it as source of truth.
+            // This ensures deletions and updates propagate correctly to all devices.
+            console.log("Received remote sync from Firebase RTDB");
+            state.roommates = data.roommates || state.roommates;
+            state.transactions = data.transactions || [];
+            saveToLocalStorage();
+            renderAll();
+
+        }, (error) => {
+            console.error("Firebase listener error:", error);
+            showToast("Firebase sync error: " + error.message, "error");
+        });
+
+        console.log("Firebase successfully connected! Listening on key:", syncKey);
+        showToast("🔥 Firebase sync active!", "success");
+    } catch (e) {
+        console.error("Firebase listener setup failed:", e);
+        showToast("Firebase connection failed. Check your config.", "error");
     }
 }
 
@@ -712,6 +797,9 @@ function renderTransactionList() {
 
         const txAmtStr = parseFloat(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+        // Only the payer (or spectator on same device) can delete
+        const canDelete = !state.currentUser || state.currentUser === tx.paidBy;
+
         item.innerHTML = `
             <div class="tx-main-info">
                 <div class="tx-icon-wrap" style="background: ${iconBg}; color: ${iconColor};">
@@ -731,14 +819,15 @@ function renderTransactionList() {
                 <div class="tx-amt-value ${tx.type}-type">₹${txAmtStr}</div>
                 <div class="tx-actions-buttons">
                     <button class="btn-icon-action edit-action" title="Edit Transaction"><i data-lucide="edit"></i></button>
-                    <button class="btn-icon-action delete-action" title="Delete Transaction"><i data-lucide="trash-2"></i></button>
+                    ${canDelete ? `<button class="btn-icon-action delete-action" title="Delete Transaction"><i data-lucide="trash-2"></i></button>` : `<span class="tx-no-delete-hint" title="Only ${tx.paidBy} can delete this">🔒</span>`}
                 </div>
             </div>
         `;
 
         // Event hooks
         item.querySelector(".edit-action").addEventListener("click", () => editTransaction(tx.id));
-        item.querySelector(".delete-action").addEventListener("click", () => deleteTransaction(tx.id));
+        const deleteBtn = item.querySelector(".delete-action");
+        if (deleteBtn) deleteBtn.addEventListener("click", () => deleteTransaction(tx.id, tx.paidBy));
 
         container.appendChild(item);
     });
@@ -1352,8 +1441,12 @@ function editTransaction(id) {
     }
 }
 
-// Delete transaction
-function deleteTransaction(id) {
+// Delete transaction — only allowed by the payer
+function deleteTransaction(id, paidBy) {
+    if (state.currentUser && state.currentUser !== paidBy) {
+        showToast(`Only ${paidBy} can delete this transaction.`, "error");
+        return;
+    }
     if (confirm("Are you sure you want to delete this transaction?")) {
         state.transactions = state.transactions.filter(t => t.id !== id);
         saveToLocalStorage();

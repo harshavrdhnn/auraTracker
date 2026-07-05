@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Aura Tracker — Auto Test Setup</title>
+    <style>
+        body { font-family: monospace; background: #0f0f1a; color: #a0f0a0; padding: 2rem; }
+        pre { background: #1a1a2e; padding: 1rem; border-radius: 8px; font-size: 0.85rem; overflow: auto; }
+        button { margin: 0.5rem; padding: 0.75rem 1.5rem; background: #7c3aed; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; }
+        button:hover { background: #6d28d9; }
+        .status { padding: 0.5rem 1rem; border-radius: 6px; margin: 0.5rem 0; }
+        .ok { background: rgba(0,200,100,0.2); color: #4ade80; }
+        .err { background: rgba(255,50,50,0.2); color: #f87171; }
+        .info { background: rgba(100,150,255,0.2); color: #93c5fd; }
+        h2 { color: #c084fc; margin-top: 2rem; }
+    </style>
+</head>
+<body>
+<h1>🔥 Aura Tracker — Firebase Test Harness</h1>
+<p>This page pre-loads the test state and opens the main app. Run steps in order.</p>
+
+<h2>Step 1 — Seed test data (Harsha / Janaki / Sushman)</h2>
+<button onclick="seedData()">🌱 Seed Fresh Data</button>
+<div id="seed-status"></div>
+
+<h2>Step 2 — Open App as Harsha</h2>
+<button onclick="openAsHarsha()">🚀 Open as Harsha</button>
+
+<h2>Step 3 — Open App as Janaki (new tab, simulates invite link)</h2>
+<button onclick="openAsJanaki()">🔗 Open as Janaki</button>
+
+<h2>Step 4 — Verify Firebase has data</h2>
+<button onclick="checkFirebase()">🔍 Check Firebase</button>
+<pre id="firebase-output">Click "Check Firebase" to see live data...</pre>
+
+<script>
+const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCs8VgAr7bQoxv5vIVrnfG5opPWa9eDkuE",
+    authDomain: "auratracker-18242.firebaseapp.com",
+    databaseURL: "https://auratracker-18242-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "auratracker-18242",
+    storageBucket: "auratracker-18242.firebasestorage.app",
+    messagingSenderId: "757820673078",
+    appId: "1:757820673078:web:176d48e26e6be657d31c97"
+};
+
+const ROOMMATES = [
+    { name: "Harsha",  color: "#7c3aed" },
+    { name: "Janaki",  color: "#db2777" },
+    { name: "Sushman", color: "#0891b2" }
+];
+
+const SETTINGS = {
+    syncKey: "",
+    firebaseConfig: JSON.stringify(FIREBASE_CONFIG)
+};
+
+function log(id, msg, type = "info") {
+    const el = document.getElementById(id);
+    const div = document.createElement("div");
+    div.className = "status " + type;
+    div.textContent = msg;
+    el.appendChild(div);
+}
+
+function seedData() {
+    document.getElementById("seed-status").innerHTML = "";
+    try {
+        localStorage.setItem("aura_roommates_v1", JSON.stringify(ROOMMATES));
+        localStorage.setItem("aura_transactions_v1", JSON.stringify([]));
+        localStorage.setItem("aura_settings_v1", JSON.stringify(SETTINGS));
+        localStorage.setItem("aura_currentUser_v1", "Harsha");
+        log("seed-status", "✅ Roommates seeded: Harsha, Janaki, Sushman", "ok");
+        log("seed-status", "✅ Firebase config saved to localStorage", "ok");
+        log("seed-status", "✅ Current user set to Harsha", "ok");
+        log("seed-status", "→ Now click 'Open as Harsha'", "info");
+    } catch(e) {
+        log("seed-status", "❌ Error: " + e.message, "err");
+    }
+}
+
+function openAsHarsha() {
+    localStorage.setItem("aura_currentUser_v1", "Harsha");
+    window.open("http://localhost:8001/auraTracker/", "_blank");
+}
+
+function openAsJanaki() {
+    // Build share URL payload
+    const payload = {
+        roommates: ROOMMATES,
+        settings: SETTINGS
+    };
+    const base64 = btoa(JSON.stringify(payload));
+    const url = "http://localhost:8001/auraTracker/#config=" + base64;
+    window.open(url, "_blank");
+}
+
+async function checkFirebase() {
+    const out = document.getElementById("firebase-output");
+    out.textContent = "Connecting to Firebase...";
+    try {
+        const syncKey = FIREBASE_CONFIG.projectId;
+        const url = `${FIREBASE_CONFIG.databaseURL}/aura_tracker/${syncKey}.json`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data) {
+            out.textContent = JSON.stringify(data, null, 2);
+        } else {
+            out.textContent = "⚠️ Firebase path is empty (null) — no data pushed yet.\nOpen the app and save some settings first.";
+        }
+    } catch(e) {
+        out.textContent = "❌ Error fetching from Firebase:\n" + e.message;
+    }
+}
+</script>
+</body>
+</html>
