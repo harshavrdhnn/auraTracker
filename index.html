@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Tracker // Roommate Split & Expense Tracker</title>
+    <!-- CSS Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase Compat SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Dashboard Header -->
+        <header>
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <i data-lucide="scale"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>Aura Tracker</h1>
+                    <p>Roommate Expense Intelligence</p>
+                </div>
+            </div>
+            
+            <div class="actions-group">
+                <!-- Active Identity Indicator Badge -->
+                <div id="header-user-identity" style="display: none; align-items: center; gap: 0.5rem; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.8125rem;">
+                    <span style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; font-weight: 500;">Device:</span>
+                    <strong id="header-user-name" style="color: var(--accent-primary);">None</strong>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="btn-manage-roommates">
+                    <i data-lucide="users"></i> Roommates
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-open-settings" title="Sync & Cloud Settings">
+                    <i data-lucide="settings"></i> Settings
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-reset-data" title="Reset All Data">
+                    <i data-lucide="trash-2"></i> Reset
+                </button>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="navigation-tabs">
+            <button class="nav-tab active" id="tab-btn-ledger">
+                <i data-lucide="wallet"></i> Balances & Ledger
+            </button>
+            <button class="nav-tab" id="tab-btn-analytics">
+                <i data-lucide="pie-chart"></i> Spending Analytics
+            </button>
+        </div>
+
+        <!-- Roommates Grid Quick-trigger -->
+        <section class="roommates-grid" id="roommates-cards-container">
+            <!-- Populated dynamically via JS -->
+        </section>
+
+        <!-- ================= BALANCES & LEDGER TAB VIEW ================= -->
+        <section id="view-ledger">
+            <div class="workspace-grid">
+                <!-- Left Column: Transaction Ledger History -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <h2 class="panel-title">
+                            <i data-lucide="list-ordered"></i> Transaction Log
+                        </h2>
+                        <button class="btn btn-primary btn-sm" id="btn-add-transaction">
+                            <i data-lucide="plus-circle"></i> Add Transaction
+                        </button>
+                    </div>
+
+                    <!-- Search and Filters -->
+                    <div class="search-filter-bar">
+                        <div class="input-group">
+                            <i data-lucide="search"></i>
+                            <input type="text" class="form-control" id="search-input" placeholder="Search description...">
+                        </div>
+                        <select class="form-control" id="filter-payer">
+                            <option value="all">All Payers</option>
+                            <!-- Roommates populated dynamically -->
+                        </select>
+                        <select class="form-control" id="filter-category">
+                            <option value="all">All Categories</option>
+                            <!-- Categories populated dynamically -->
+                        </select>
+                    </div>
+
+                    <!-- Transactions List -->
+                    <div class="transaction-list" id="transaction-list-container">
+                        <!-- Loaded dynamically via JS -->
+                    </div>
+                </div>
+
+                <!-- Right Column: Settle Up & Insights -->
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <!-- Debts settlement board -->
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <h2 class="panel-title">
+                                <i data-lucide="check-square"></i> Aura Debt Board
+                            </h2>
+                        </div>
+                        
+                        <!-- Simplify Debt display box -->
+                        <div class="debts-summary-box">
+                            <div class="debts-summary-title">
+                                <i data-lucide="sparkles" style="color: var(--accent-secondary); width: 16px; height: 16px;"></i>
+                                Simplified Settlements
+                            </div>
+                            <div class="debts-list" id="simplified-debts-container">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Statistics summary widget -->
+                        <div class="debts-summary-box" style="margin-bottom: 0;">
+                            <div class="debts-summary-title">
+                                <i data-lucide="trending-up" style="color: var(--accent-primary); width: 16px; height: 16px;"></i>
+                                Expense Insights
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;" id="insights-container">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SPENDING ANALYTICS TAB VIEW ================= -->
+        <section id="view-analytics" style="display: none;">
+            <div class="analytics-view">
+                <!-- Chart 1: Payments by Payer -->
+                <div class="chart-card">
+                    <div class="panel-header">
+                        <h2 class="panel-title"><i data-lucide="user-check"></i> Paid amounts by Roommate</h2>
+                    </div>
+                    <div class="chart-container-wrap">
+                        <canvas id="payerChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Categories Shares -->
+                <div class="chart-card">
+                    <div class="panel-header">
+                        <h2 class="panel-title"><i data-lucide="tag"></i> Spending by Category</h2>
+                    </div>
+                    <div class="chart-container-wrap">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ================= TRANSACTION MODAL ================= -->
+    <div class="modal-overlay" id="transaction-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-heading-label">Add Transaction</h3>
+                <button class="btn-close" id="btn-modal-close" title="Close Modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <form id="transaction-form">
+                <!-- Transaction ID hidden for editing -->
+                <input type="hidden" id="tx-id">
+
+                <!-- Type Selector Segment -->
+                <div class="form-group">
+                    <label>Entry Type</label>
+                    <div class="btn-segments">
+                        <button type="button" class="segment-btn active" id="type-btn-expense" data-type="expense">Shared Expense</button>
+                        <button type="button" class="segment-btn" id="type-btn-settlement" data-type="settlement">Settle Payment</button>
+                    </div>
+                </div>
+
+                <!-- Expense Fields Group -->
+                <div id="expense-fields-block">
+                    <!-- Paid By Roommate Payer -->
+                    <div class="form-group">
+                        <label for="tx-payer">Paid By</label>
+                        <select class="form-control" id="tx-payer" required>
+                            <!-- Roommates populated dynamically -->
+                        </select>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="form-group">
+                        <label for="tx-description">Description</label>
+                        <input type="text" class="form-control" id="tx-description" placeholder="e.g. WiFi Bill, Groceries, Rent" required>
+                    </div>
+
+                    <!-- Category -->
+                    <div class="form-group">
+                        <label for="tx-category">Category</label>
+                        <select class="form-control" id="tx-category" required>
+                            <option value="Rent">Rent</option>
+                            <option value="Groceries">Groceries</option>
+                            <option value="Utilities">Utilities</option>
+                            <option value="Dine Out">Dine Out</option>
+                            <option value="Travel">Travel</option>
+                            <option value="Misc">Misc</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Settlement Fields Group (Shows when settlement type is active) -->
+                <div id="settlement-fields-block" style="display: none;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-group">
+                            <label for="tx-settle-from">Who Paid</label>
+                            <select class="form-control" id="tx-settle-from">
+                                <!-- Dynamic -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="tx-settle-to">Who Received</label>
+                            <select class="form-control" id="tx-settle-to">
+                                <!-- Dynamic -->
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shared inputs (Amount & Date) -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="form-group">
+                        <label for="tx-amount">Amount (₹)</label>
+                        <input type="number" class="form-control" id="tx-amount" min="0.01" step="any" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tx-date">Date</label>
+                        <input type="date" class="form-control" id="tx-date" required>
+                    </div>
+                </div>
+
+                <!-- Custom Split config selector (Expense only) -->
+                <div class="form-group" id="split-options-block">
+                    <label>Split Rules</label>
+                    <div class="btn-segments">
+                        <button type="button" class="segment-btn active" data-split="equal">Equally</button>
+                        <button type="button" class="segment-btn" data-split="custom">Custom</button>
+                        <button type="button" class="segment-btn" data-split="percent">Percent</button>
+                        <button type="button" class="segment-btn" data-split="shares">Shares</button>
+                    </div>
+
+                    <!-- Split subform container -->
+                    <div class="split-config-container">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;" id="split-instructions">
+                            Uncheck roommates to exclude them from the equal split.
+                        </div>
+                        <div class="split-members-list" id="split-members-list-container">
+                            <!-- Dynamic inputs for each roommate -->
+                        </div>
+                        <div id="split-validation-msg">
+                            <!-- Validation status helper -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Form Actions -->
+                <div class="form-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-form-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= SETTINGS / SYNC MODAL ================= -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 class="modal-title">Sync & Cloud Settings</h3>
+                <button class="btn-close" id="btn-settings-close" title="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <form id="settings-form">
+                <!-- Sync Passcode Key -->
+                <div class="form-group">
+                    <label for="settings-sync-key">Sync Passcode (Sync Key)</label>
+                    <input type="text" class="form-control" id="settings-sync-key" placeholder="e.g. roommate-room-102-rtdb">
+                    <p style="font-size: 0.725rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        Devices with this same passcode will synchronize and update the roommate ledger in real time.
+                    </p>
+                </div>
+
+                <!-- Firebase Config -->
+                <div class="form-group">
+                    <label for="settings-firebase-config">Firebase Realtime DB Config JSON</label>
+                    <textarea class="form-control" id="settings-firebase-config" rows="4" placeholder='e.g. { "apiKey": "...", "databaseURL": "...", "projectId": "..." }'></textarea>
+                    <p style="font-size: 0.725rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        Paste the web configuration object from your Firebase Console. Database rules should allow read/writes for users syncing.
+                    </p>
+                </div>
+
+                <!-- Config Share Link Generator -->
+                <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+                    <label>Share Config Link</label>
+                    <p style="font-size: 0.725rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                        Click generate to create an onboarding link. Sharing it with your roommates configures their devices instantly!
+                    </p>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-generate-share-link">
+                        <i data-lucide="share-2" style="width: 14px; height: 14px;"></i> Generate Share URL
+                    </button>
+                    
+                    <div id="share-link-container" style="display: none; margin-top: 0.75rem;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" class="form-control form-control-sm" id="share-link-input" readonly>
+                            <button type="button" class="btn btn-primary btn-sm" id="btn-copy-share-link" style="padding: 0.45rem 0.8rem; font-size: 0.75rem;">Copy</button>
+                        </div>
+                        <p style="font-size: 0.725rem; color: var(--accent-green); margin-top: 0.25rem; font-weight: 600;">Link created! Copy and send to your roommates.</p>
+                    </div>
+                </div>
+
+                <!-- Guide -->
+                <div style="border-top: 1px solid var(--border-color); padding-top: 1.25rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">
+                    <strong>Hosting with GitHub Pages:</strong>
+                    <ol style="margin-left: 1.25rem; margin-top: 0.25rem;">
+                        <li>Create a public GitHub repo called <code>aura-tracker</code>.</li>
+                        <li>Upload <code>index.html</code>, <code>styles.css</code>, and <code>app.js</code> directly to it.</li>
+                        <li>Enable GitHub Pages under repo Settings -> Pages.</li>
+                        <li>Your website will be live at <code>https://&lt;username&gt;.github.io/aura-tracker/</code>!</li>
+                    </ol>
+                </div>
+
+                <!-- Modal Actions -->
+                <div class="form-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-settings-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= ONBOARDING / WIZARD MODAL ================= -->
+    <div class="modal-overlay" id="onboarding-modal">
+        <div class="modal-box">
+            <div class="wizard-logo-center">
+                <div class="logo-icon" style="width: 48px; height: 48px; border-radius: 14px;">
+                    <i data-lucide="scale"></i>
+                </div>
+                <h3 class="wizard-title">Welcome to Aura Tracker</h3>
+                <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 0.25rem;">Configure your roommate workspace to begin</p>
+            </div>
+            
+            <form id="onboarding-form">
+                <div class="form-group">
+                    <label>Set Roommate Names</label>
+                    <p style="font-size: 0.725rem; color: var(--text-muted); margin-bottom: 0.75rem;">Assign a name and custom indicator color for each roommate (min 2, max 6).</p>
+                    
+                    <div class="onboarding-list" id="onboarding-roommates-list">
+                        <!-- Default 3 roommate rows generated via JS, with remove/add support -->
+                    </div>
+
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-add-roommate-row" style="width: 100%; margin-top: 0.5rem;">
+                        <i data-lucide="plus"></i> Add Another Roommate
+                    </button>
+                </div>
+
+                <!-- Bound Identity step -->
+                <div class="form-group" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+                    <label for="onboarding-user-select">Which roommate are you on this device?</label>
+                    <select class="form-control" id="onboarding-user-select" required>
+                        <!-- Populated dynamically via JS -->
+                    </select>
+                    <p style="font-size: 0.725rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        Binds this browser session to your roommate profile for default selections and custom highlights.
+                    </p>
+                </div>
+
+                <div class="form-footer" style="margin-top: 2rem;">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Initialize Tracker</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= MANAGE ROOMMATES MODAL ================= -->
+    <div class="modal-overlay" id="roommates-manager-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 class="modal-title">Manage Roommates</h3>
+                <button class="btn-close" id="btn-roommates-mgr-close" title="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <form id="roommates-mgr-form">
+                <div class="form-group">
+                    <label>Edit Active Roommates</label>
+                    <p style="font-size: 0.725rem; color: var(--text-muted); margin-bottom: 0.75rem;">Modify names, colors, or add/delete roommates. Balance changes are calculated in real time.</p>
+                    
+                    <div class="onboarding-list" id="mgr-roommates-list">
+                        <!-- Populated dynamically -->
+                    </div>
+
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-mgr-add-roommate" style="width: 100%; margin-top: 0.5rem;">
+                        <i data-lucide="plus"></i> Add Roommate
+                    </button>
+                </div>
+
+                <!-- Bound Identity setting -->
+                <div class="form-group" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+                    <label for="mgr-user-select">Your identity on this device</label>
+                    <select class="form-control" id="mgr-user-select" required>
+                        <!-- Populated dynamically via JS -->
+                    </select>
+                </div>
+
+                <div class="form-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-roommates-mgr-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= IDENTITY SELECTION INVITE MODAL ================= -->
+    <div class="modal-overlay" id="identity-modal">
+        <div class="modal-box" style="max-width: 420px; text-align: center;">
+            <div class="wizard-logo-center">
+                <div class="logo-icon" style="width: 46px; height: 46px; border-radius: 12px; margin: 0 auto 0.75rem auto; background: rgba(99, 102, 241, 0.15); color: var(--accent-primary);">
+                    <i data-lucide="user-check"></i>
+                </div>
+                <h3 class="wizard-title" style="font-size: 1.4rem;">Select Your Identity</h3>
+                <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Which roommate are you on this device?
+                </p>
+            </div>
+            
+            <div id="identity-options-list" style="display: flex; flex-direction: column; gap: 0.75rem; margin: 1.5rem 0;">
+                <!-- Populated dynamically with roommate selection buttons -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= TOAST NOTIFICATION ================= -->
+    <div class="toast" id="toast-notification">
+        <i data-lucide="check-circle" id="toast-icon"></i>
+        <span id="toast-message">Action completed successfully</span>
+    </div>
+
+    <!-- Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>
