@@ -1494,7 +1494,7 @@ function handleSaveSettings(e) {
 }
 
 // Onboarding config url link generation
-function handleGenerateShareLink() {
+async function handleGenerateShareLink() {
     const configData = {
         roommates: state.roommates,
         settings: state.settings
@@ -1507,9 +1507,41 @@ function handleGenerateShareLink() {
         const fullUrl = `${origin}#config=${base64Str}`;
 
         const input = document.getElementById("share-link-input");
-        input.value = fullUrl;
-        
-        document.getElementById("share-link-container").style.display = "block";
+        const container = document.getElementById("share-link-container");
+        const btn = document.getElementById("btn-generate-share-link");
+
+        // Show container with loading state
+        input.value = "⏳ Generating short link...";
+        input.disabled = true;
+        if (btn) btn.disabled = true;
+        container.style.display = "block";
+
+        // Try TinyURL free API (no key needed, uses CORS proxy)
+        let shortUrl = null;
+        try {
+            const proxyUrl = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(fullUrl)}`;
+            const resp = await fetch(proxyUrl);
+            if (resp.ok) {
+                const text = await resp.text();
+                if (text.startsWith("https://tinyurl.com/")) {
+                    shortUrl = text.trim();
+                }
+            }
+        } catch (e) {
+            console.warn("TinyURL failed, using full URL:", e);
+        }
+
+        // Fall back to full URL if shortening failed
+        input.value = shortUrl || fullUrl;
+        input.disabled = false;
+        if (btn) btn.disabled = false;
+
+        if (shortUrl) {
+            showToast("🔗 Short invite link ready!", "success");
+        } else {
+            showToast("Link generated (shortening unavailable — full URL used).", "success");
+        }
+
     } catch (e) {
         console.error("Link generation failed:", e);
         showToast("Failed to generate link.", "error");
@@ -1522,7 +1554,7 @@ function copyShareLinkToClipboard() {
     input.setSelectionRange(0, 99999);
     
     navigator.clipboard.writeText(input.value).then(() => {
-        showToast("Configuration URL copied to clipboard!", "success");
+        showToast("Invite link copied to clipboard! 📋", "success");
     }).catch(err => {
         console.error("Clipboard copy failed:", err);
         showToast("Failed to auto-copy. Select and copy manually.", "error");
