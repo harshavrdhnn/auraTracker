@@ -204,7 +204,8 @@ header::before {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 140px;
+    min-height: 180px;
+    height: auto;
 }
 
 .roommate-card::after {
@@ -253,33 +254,52 @@ header::before {
 }
 
 .roommate-balance-info {
-    margin-top: 1.25rem;
+    margin-top: 1rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
 }
 
-.roommate-balance-label {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+.roommate-balance-list {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+}
+
+.roommate-balance-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    padding-bottom: 0.2rem;
+}
+
+.roommate-balance-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.roommate-balance-item .lbl {
     color: var(--text-secondary);
 }
 
-.roommate-balance-val {
-    font-family: var(--font-heading);
-    font-size: 1.5rem;
-    font-weight: 800;
-    margin-top: 0.15rem;
+.roommate-balance-item .val {
+    font-weight: 700;
 }
 
-.roommate-balance-val.positive {
+.roommate-balance-item .val.owes-you {
     color: var(--accent-green);
 }
 
-.roommate-balance-val.negative {
+.roommate-balance-item .val.you-owe {
     color: var(--accent-red);
 }
 
-.roommate-balance-val.neutral {
-    color: var(--text-secondary);
+.roommate-balance-item .val.settled {
+    color: var(--text-muted);
 }
 
 .roommate-quick-add-btn {
@@ -1179,4 +1199,101 @@ input[type="color"]::-webkit-color-swatch {
     border-radius: 4px;
     margin-left: 0.5rem;
     display: inline-block;
+}
+
+/* Comprehensive Mobile & Responsive Adjustments */
+@media (max-width: 600px) {
+    .container {
+        padding: 0.75rem;
+    }
+
+    header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 1.25rem;
+        padding: 1.25rem 1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .logo-section {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .actions-group {
+        display: flex !important;
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .actions-group .btn, #header-user-identity {
+        flex: 1 1 auto;
+        justify-content: center;
+        font-size: 0.75rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .navigation-tabs {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-self: stretch;
+        margin-bottom: 1.25rem;
+        padding: 0.25rem;
+    }
+
+    .nav-tab {
+        padding: 0.5rem 0.5rem;
+        font-size: 0.85rem;
+        text-align: center;
+        justify-content: center;
+    }
+
+    .roommates-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .roommate-card {
+        min-height: auto;
+        padding: 1.25rem;
+    }
+
+    .panel-card {
+        padding: 1.25rem;
+    }
+
+    .modal-box {
+        padding: 1.25rem;
+        max-height: 95vh;
+    }
+
+    .transaction-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .tx-value-block {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        padding-top: 0.75rem;
+    }
+
+    .toast {
+        bottom: 1rem;
+        right: 1rem;
+        left: 1rem;
+        width: auto;
+        justify-content: center;
+    }
 }

@@ -521,6 +521,9 @@ function calculateBalances() {
     for (let name in balances) {
         balances[name] = Math.round(balances[name] * 100) / 100;
     }
+
+    // DEBUG: log final balances
+    console.log("[AuraTracker] Calculated balances:", JSON.stringify(balances));
     return balances;
 }
 
@@ -530,22 +533,9 @@ function renderRoommateCards() {
     container.innerHTML = "";
     
     const balances = calculateBalances();
+    const transfers = simplifyDebts(balances);
 
     state.roommates.forEach(rm => {
-        const bal = balances[rm.name] || 0;
-        let balClass = "neutral";
-        let signPrefix = "";
-        let balText = `₹0.00`;
-
-        if (bal > 0.01) {
-            balClass = "positive";
-            signPrefix = "+";
-            balText = `₹${bal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        } else if (bal < -0.01) {
-            balClass = "negative";
-            balText = `-₹${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        }
-
         const card = document.createElement("div");
         card.className = "roommate-card";
         card.style.setProperty("--roommate-color", rm.color);
@@ -553,6 +543,44 @@ function renderRoommateCards() {
 
         const isYou = rm.name === state.currentUser;
         const youBadge = isYou ? `<span class="identity-you-pill">You</span>` : "";
+
+        // Collect all debt/credit relationships for this roommate from simplified transfers
+        let detailedOwesHtml = "";
+        
+        // Filter transfers where this roommate is involved
+        const owesOthers = transfers.filter(t => t.from === rm.name);
+        const owedByOthers = transfers.filter(t => t.to === rm.name);
+
+        if (owesOthers.length > 0) {
+            owesOthers.forEach(t => {
+                detailedOwesHtml += `
+                    <div class="roommate-balance-item">
+                        <span class="lbl">${isYou ? "You owe" : "Owes"} ${t.to}</span>
+                        <span class="val you-owe">₹${t.amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                    </div>
+                `;
+            });
+        }
+
+        if (owedByOthers.length > 0) {
+            owedByOthers.forEach(t => {
+                detailedOwesHtml += `
+                    <div class="roommate-balance-item">
+                        <span class="lbl">${t.from} ${isYou ? "owes you" : "owes"}</span>
+                        <span class="val owes-you">₹${t.amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                    </div>
+                `;
+            });
+        }
+
+        // Default if completely settled up
+        if (owesOthers.length === 0 && owedByOthers.length === 0) {
+            detailedOwesHtml = `
+                <div class="roommate-balance-item" style="justify-content: center; padding-top: 0.5rem;">
+                    <span class="val settled">✨ Settled Up</span>
+                </div>
+            `;
+        }
 
         card.innerHTML = `
             <button class="roommate-quick-add-btn" title="Paid by ${rm.name}">
@@ -565,8 +593,9 @@ function renderRoommateCards() {
                 <div class="roommate-name">${rm.name}${youBadge}</div>
             </div>
             <div class="roommate-balance-info">
-                <div class="roommate-balance-label">Net Balance</div>
-                <div class="roommate-balance-val ${balClass}">${signPrefix}${balText}</div>
+                <div class="roommate-balance-list">
+                    ${detailedOwesHtml}
+                </div>
             </div>
         `;
         container.appendChild(card);
@@ -882,6 +911,9 @@ function openSettlementModalPreFilled(fromRoomie, toRoomie, amount) {
     document.getElementById("tx-settle-from").value = fromRoomie;
     document.getElementById("tx-settle-to").value = toRoomie;
     document.getElementById("tx-amount").value = amount;
+    
+    // Set correct description based on the pre-filled values
+    document.getElementById("tx-description").value = `Settle: ${fromRoomie} paid ${toRoomie}`;
     
     document.getElementById("modal-heading-label").textContent = "Settle Debt";
 }
@@ -1270,13 +1302,17 @@ function handleSaveTransaction(e) {
 
         // Collect splits
         let splits = {};
+        let splitInputs = {};
         const rows = document.querySelectorAll(".split-member-row");
 
         if (splitType === "equal") {
             let checkedRoomies = [];
             rows.forEach(row => {
                 const cb = row.querySelector(".split-member-checkbox");
-                if (cb && cb.checked) checkedRoomies.push(row.dataset.name);
+                if (cb && cb.checked) {
+                    checkedRoomies.push(row.dataset.name);
+                    splitInputs[row.dataset.name] = 1;
+                }
             });
 
             if (checkedRoomies.length === 0) {
@@ -1303,6 +1339,7 @@ function handleSaveTransaction(e) {
                 const val = parseFloat(row.querySelector(".split-amt-input").value) || 0;
                 if (cb && cb.checked) {
                     splits[row.dataset.name] = val;
+                    splitInputs[row.dataset.name] = val;
                     sum += val;
                 }
             });
@@ -1320,6 +1357,7 @@ function handleSaveTransaction(e) {
                 const pct = parseFloat(row.querySelector(".split-pct-input").value) || 0;
                 if (cb && cb.checked) {
                     sumPct += pct;
+                    splitInputs[row.dataset.name] = pct;
                     const calculatedShare = Math.round((amount * (pct / 100)) * 100) / 100;
                     splits[row.dataset.name] = calculatedShare;
                 }
@@ -1335,7 +1373,10 @@ function handleSaveTransaction(e) {
             rows.forEach(row => {
                 const cb = row.querySelector(".split-member-checkbox");
                 const sh = parseFloat(row.querySelector(".split-shares-input").value) || 0;
-                if (cb && cb.checked) totalShares += sh;
+                if (cb && cb.checked) {
+                    totalShares += sh;
+                    splitInputs[row.dataset.name] = sh;
+                }
             });
 
             if (totalShares <= 0) {
@@ -1354,6 +1395,12 @@ function handleSaveTransaction(e) {
         }
 
         transactionData.splits = splits;
+        transactionData.splitInputs = splitInputs;
+
+        // DEBUG: log splits to help diagnose balance bugs
+        console.log("[AuraTracker] Saving transaction:", JSON.stringify(transactionData, null, 2));
+        console.log("[AuraTracker] Splits breakdown:", JSON.stringify(splits));
+        console.log("[AuraTracker] checkedRoomies count:", Object.keys(splits).length, "→ names:", Object.keys(splits));
 
     } else {
         // Settlement type
@@ -1422,15 +1469,25 @@ function editTransaction(id) {
             const name = row.dataset.name;
             const cb = row.querySelector(".split-member-checkbox");
             
-            if (tx.splits && tx.splits.hasOwnProperty(name)) {
-                cb.checked = true;
-                if (splitType === "custom") {
-                    row.querySelector(".split-amt-input").value = tx.splits[name];
+            const hasSplit = tx.splits && tx.splits.hasOwnProperty(name);
+            cb.checked = hasSplit;
+            
+            if (splitType === "custom") {
+                const input = row.querySelector(".split-amt-input");
+                if (input) input.value = hasSplit ? tx.splits[name] : 0;
+            } else if (splitType === "percent") {
+                const input = row.querySelector(".split-pct-input");
+                if (input) {
+                    input.value = (tx.splitInputs && tx.splitInputs.hasOwnProperty(name)) 
+                        ? tx.splitInputs[name] 
+                        : (hasSplit ? Math.round((tx.splits[name] / tx.amount) * 100) : 0);
                 }
-            } else {
-                cb.checked = false;
-                if (splitType === "custom") {
-                    row.querySelector(".split-amt-input").value = 0;
+            } else if (splitType === "shares") {
+                const input = row.querySelector(".split-shares-input");
+                if (input) {
+                    input.value = (tx.splitInputs && tx.splitInputs.hasOwnProperty(name))
+                        ? tx.splitInputs[name]
+                        : (hasSplit ? 1 : 0);
                 }
             }
         });
