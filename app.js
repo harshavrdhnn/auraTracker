@@ -533,7 +533,7 @@ function renderRoommateCards() {
     container.innerHTML = "";
     
     const balances = calculateBalances();
-    const transfers = simplifyDebts(balances);
+    const transfers = calculatePairwiseDebts();
 
     state.roommates.forEach(rm => {
         const card = document.createElement("div");
@@ -544,7 +544,7 @@ function renderRoommateCards() {
         const isYou = rm.name === state.currentUser;
         const youBadge = isYou ? `<span class="identity-you-pill">You</span>` : "";
 
-        // Collect all debt/credit relationships for this roommate from simplified transfers
+        // Collect all debt/credit relationships for this roommate
         let detailedOwesHtml = "";
         
         // Filter transfers where this roommate is involved
@@ -608,7 +608,7 @@ function renderSettleDebtsBoard() {
     container.innerHTML = "";
 
     const balances = calculateBalances();
-    const transfers = simplifyDebts(balances);
+    const transfers = calculatePairwiseDebts();
 
     if (transfers.length === 0) {
         container.innerHTML = `
@@ -643,51 +643,69 @@ function renderSettleDebtsBoard() {
     });
 }
 
-// Greedily simplify debt settlements
-function simplifyDebts(balances) {
-    let debtors = [];
-    let creditors = [];
+// Compute unsimplified pairwise direct debts
+function calculatePairwiseDebts() {
+    let matrix = {};
+    // Initialize matrix
+    state.roommates.forEach(r1 => {
+        matrix[r1.name] = {};
+        state.roommates.forEach(r2 => {
+            matrix[r1.name][r2.name] = 0;
+        });
+    });
 
-    for (let name in balances) {
-        let bal = balances[name];
-        if (bal < -0.01) {
-            debtors.push({ name: name, amount: -bal });
-        } else if (bal > 0.01) {
-            creditors.push({ name: name, amount: bal });
+    state.transactions.forEach(tx => {
+        const amt = parseFloat(tx.amount) || 0;
+        if (amt <= 0) return;
+
+        if (tx.type === "expense") {
+            const payer = tx.paidBy;
+            if (tx.splits) {
+                for (let debtor in tx.splits) {
+                    if (debtor !== payer) {
+                        const splitAmt = parseFloat(tx.splits[debtor]) || 0;
+                        matrix[payer][debtor] += splitAmt;
+                    }
+                }
+            }
+        } else if (tx.type === "settlement") {
+            const sender = tx.paidBy;
+            const receiver = tx.receiver;
+            // Sender paid Receiver directly. This increases the amount Sender has paid Receiver.
+            matrix[sender][receiver] += amt;
         }
-    }
+    });
 
-    // Sort descending
-    debtors.sort((a, b) => b.amount - a.amount);
-    creditors.sort((a, b) => b.amount - a.amount);
-
+    // Calculate the net pairwise debts
     let transfers = [];
-    let i = 0, j = 0;
-
-    while (i < debtors.length && j < creditors.length) {
-        let debtor = debtors[i];
-        let creditor = creditors[j];
-
-        let amount = Math.min(debtor.amount, creditor.amount);
-        amount = Math.round(amount * 100) / 100;
-
-        if (amount > 0.01) {
-            transfers.push({
-                from: debtor.name,
-                to: creditor.name,
-                amount: amount
-            });
+    const names = state.roommates.map(r => r.name);
+    for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+            const u = names[i];
+            const v = names[j];
+            const net = matrix[u][v] - matrix[v][u];
+            const roundedNet = Math.round(net * 100) / 100;
+            if (roundedNet > 0.01) {
+                // v owes u roundedNet
+                transfers.push({
+                    from: v,
+                    to: u,
+                    amount: roundedNet
+                });
+            } else if (roundedNet < -0.01) {
+                // u owes v -roundedNet
+                transfers.push({
+                    from: u,
+                    to: v,
+                    amount: -roundedNet
+                });
+            }
         }
-
-        debtor.amount -= amount;
-        creditor.amount -= amount;
-
-        if (debtor.amount < 0.01) i++;
-        if (creditor.amount < 0.01) j++;
     }
-
     return transfers;
 }
+
+
 
 // Render insights widget on the right sidebar
 function renderInsightsWidget() {
@@ -752,8 +770,15 @@ function renderTransactionList() {
         return true;
     });
 
-    // Sort newest first
-    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Sort newest first (by date, then by creation order for same-date entries)
+    filtered.sort((a, b) => {
+        const dateDiff = new Date(b.date) - new Date(a.date);
+        if (dateDiff !== 0) return dateDiff;
+        // For same date, sort by ID timestamp (newer first)
+        const aTime = parseInt(a.id.split('-')[1]) || 0;
+        const bTime = parseInt(b.id.split('-')[1]) || 0;
+        return bTime - aTime;
+    });
 
     // Gather categories for dropdown filter
     const activeCats = new Set();

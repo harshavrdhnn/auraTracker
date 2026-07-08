@@ -1,4 +1,4 @@
-// Comprehensive Test Suite for Aura Debt Board calculations & simplification
+// Comprehensive Test Suite for Aura Debt Board calculations (Pairwise Netting)
 const state = {
     roommates: [
         { name: "Harsha", color: "#7c3aed" },
@@ -45,60 +45,64 @@ function calculateBalances() {
     return balances;
 }
 
-function simplifyDebts(balances) {
-    let debtors = [];
-    let creditors = [];
+function calculatePairwiseDebts() {
+    let matrix = {};
+    state.roommates.forEach(r1 => {
+        matrix[r1.name] = {};
+        state.roommates.forEach(r2 => {
+            matrix[r1.name][r2.name] = 0;
+        });
+    });
 
-    for (let name in balances) {
-        let bal = balances[name];
-        if (bal < -0.01) {
-            debtors.push({ name: name, amount: -bal });
-        } else if (bal > 0.01) {
-            creditors.push({ name: name, amount: bal });
+    state.transactions.forEach(tx => {
+        const amt = parseFloat(tx.amount) || 0;
+        if (amt <= 0) return;
+
+        if (tx.type === "expense") {
+            const payer = tx.paidBy;
+            if (tx.splits) {
+                for (let debtor in tx.splits) {
+                    if (debtor !== payer) {
+                        const splitAmt = parseFloat(tx.splits[debtor]) || 0;
+                        matrix[payer][debtor] += splitAmt;
+                    }
+                }
+            }
+        } else if (tx.type === "settlement") {
+            const sender = tx.paidBy;
+            const receiver = tx.receiver;
+            matrix[sender][receiver] += amt;
         }
-    }
-
-    debtors.sort((a, b) => b.amount - a.amount);
-    creditors.sort((a, b) => b.amount - a.amount);
+    });
 
     let transfers = [];
-    let i = 0, j = 0;
-
-    while (i < debtors.length && j < creditors.length) {
-        let debtor = debtors[i];
-        let creditor = creditors[j];
-
-        let amount = Math.min(debtor.amount, creditor.amount);
-        amount = Math.round(amount * 100) / 100;
-
-        if (amount > 0.01) {
-            transfers.push({
-                from: debtor.name,
-                to: creditor.name,
-                amount: amount
-            });
+    const names = state.roommates.map(r => r.name);
+    for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+            const u = names[i];
+            const v = names[j];
+            const net = matrix[u][v] - matrix[v][u];
+            const roundedNet = Math.round(net * 100) / 100;
+            if (roundedNet > 0.01) {
+                transfers.push({ from: v, to: u, amount: roundedNet });
+            } else if (roundedNet < -0.01) {
+                transfers.push({ from: u, to: v, amount: -roundedNet });
+            }
         }
-
-        debtor.amount -= amount;
-        creditor.amount -= amount;
-
-        if (debtor.amount < 0.01) i++;
-        if (creditor.amount < 0.01) j++;
     }
-
     return transfers;
 }
 
 function runTestCase(title, action, expectedBalances, expectedDebts) {
     action();
     const balances = calculateBalances();
-    const debts = simplifyDebts(balances);
+    const debts = calculatePairwiseDebts();
     
     console.log(`\n========================================`);
     console.log(`TEST: ${title}`);
     console.log(`========================================`);
     console.log(`Balances:`, balances);
-    console.log(`Debts Board:`, debts);
+    console.log(`Debts:`, debts);
 
     // Assert balances
     let balancesPassed = true;
@@ -109,7 +113,7 @@ function runTestCase(title, action, expectedBalances, expectedDebts) {
         }
     }
 
-    // Assert simplified transfers
+    // Assert transfers
     let debtsPassed = true;
     if (debts.length !== expectedDebts.length) {
         debtsPassed = false;
@@ -124,7 +128,7 @@ function runTestCase(title, action, expectedBalances, expectedDebts) {
     }
 
     if (!debtsPassed) {
-        console.log(`❌ Debts Board Mismatch! Got:`, debts, `Expected:`, expectedDebts);
+        console.log(`❌ Debts Mismatch! Got:`, debts, `Expected:`, expectedDebts);
     }
 
     if (balancesPassed && debtsPassed) {
@@ -176,7 +180,7 @@ runTestCase(
 
 // 3. Overlapping Expenses
 runTestCase(
-    "3. Multiple Overlapping Expenses (Simplification Check)",
+    "3. Multiple Overlapping Expenses (Direct Netting Check)",
     () => {
         state.transactions = [
             {
@@ -197,8 +201,9 @@ runTestCase(
     },
     { "Harsha": 800, "Janaki": -250, "Sushman": -550 },
     [
-        { from: "Sushman", to: "Harsha", amount: 550 },
-        { from: "Janaki", to: "Harsha", amount: 250 }
+        { from: "Janaki", to: "Harsha", amount: 350 },
+        { from: "Sushman", to: "Harsha", amount: 450 },
+        { from: "Sushman", to: "Janaki", amount: 100 }
     ]
 );
 
@@ -216,7 +221,9 @@ runTestCase(
     },
     { "Harsha": 550, "Janaki": 0, "Sushman": -550 },
     [
-        { from: "Sushman", to: "Harsha", amount: 550 }
+        { from: "Janaki", to: "Harsha", amount: 100 },
+        { from: "Sushman", to: "Harsha", amount: 450 },
+        { from: "Sushman", to: "Janaki", amount: 100 }
     ]
 );
 
@@ -297,7 +304,36 @@ runTestCase(
     },
     { "Harsha": 400, "Janaki": 50, "Sushman": -450 },
     [
-        { from: "Sushman", to: "Harsha", amount: 400 },
-        { from: "Sushman", to: "Janaki", amount: 50 }
+        { from: "Harsha", to: "Janaki", amount: 50 },
+        { from: "Sushman", to: "Harsha", amount: 450 }
+    ]
+);
+
+// 8. User's specific scenario
+runTestCase(
+    "8. User's Scenario (Harsha paid 3700 split 3-ways, Janaki paid 14000 split 3-ways)",
+    () => {
+        state.transactions = [
+            {
+                id: "user-t1",
+                type: "expense",
+                amount: 3700,
+                paidBy: "Harsha",
+                splits: { "Harsha": 1233.34, "Janaki": 1233.33, "Sushman": 1233.33 }
+            },
+            {
+                id: "user-t2",
+                type: "expense",
+                amount: 14000,
+                paidBy: "Janaki",
+                splits: { "Harsha": 4666.66, "Janaki": 4666.67, "Sushman": 4666.67 }
+            }
+        ];
+    },
+    { "Harsha": -2200, "Janaki": 8100, "Sushman": -5900 },
+    [
+        { from: "Harsha", to: "Janaki", amount: 3433.33 },
+        { from: "Sushman", to: "Harsha", amount: 1233.33 },
+        { from: "Sushman", to: "Janaki", amount: 4666.67 }
     ]
 );
