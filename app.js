@@ -344,6 +344,9 @@ function initEventListeners() {
         state.filters.category = e.target.value;
         renderTransactionList();
     });
+    document.getElementById("sort-order").addEventListener("change", () => {
+        renderTransactionList();
+    });
 }
 
 // -------------------------------------------------------------
@@ -770,14 +773,20 @@ function renderTransactionList() {
         return true;
     });
 
-    // Sort newest first (by date, then by creation order for same-date entries)
+    // Sort based on user selection
+    const sortOrder = document.getElementById("sort-order").value;
     filtered.sort((a, b) => {
-        const dateDiff = new Date(b.date) - new Date(a.date);
-        if (dateDiff !== 0) return dateDiff;
-        // For same date, sort by ID timestamp (newer first)
-        const aTime = parseInt(a.id.split('-')[1]) || 0;
-        const bTime = parseInt(b.id.split('-')[1]) || 0;
-        return bTime - aTime;
+        if (sortOrder === "date-desc" || sortOrder === "date-asc") {
+            const dateDiff = new Date(b.date) - new Date(a.date);
+            if (dateDiff !== 0) return sortOrder === "date-desc" ? dateDiff : -dateDiff;
+            const aTime = parseInt(a.id.split('-')[1]) || 0;
+            const bTime = parseInt(b.id.split('-')[1]) || 0;
+            return sortOrder === "date-desc" ? bTime - aTime : aTime - bTime;
+        } else {
+            const amtA = parseFloat(a.amount) || 0;
+            const amtB = parseFloat(b.amount) || 0;
+            return sortOrder === "amount-desc" ? amtB - amtA : amtA - amtB;
+        }
     });
 
     // Gather categories for dropdown filter
