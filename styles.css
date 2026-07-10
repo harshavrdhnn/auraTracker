@@ -1202,23 +1202,30 @@ input[type="color"]::-webkit-color-swatch {
 }
 
 /* Comprehensive Mobile & Responsive Adjustments */
-@media (max-width: 600px) {
+
+/* ---- Tablet breakpoint ---- */
+@media (max-width: 768px) {
     .container {
-        padding: 0.75rem;
+        padding: 1rem;
     }
 
     header {
         flex-direction: column;
         align-items: center;
         text-align: center;
-        gap: 1.25rem;
-        padding: 1.25rem 1rem;
+        gap: 1rem;
+        padding: 1.15rem 1rem;
         margin-bottom: 1.25rem;
+        border-radius: var(--radius-md);
     }
 
     .logo-section {
         flex-direction: column;
-        gap: 0.5rem;
+        gap: 0.4rem;
+    }
+
+    .logo-text h1 {
+        font-size: 1.25rem;
     }
 
     .actions-group {
@@ -1234,7 +1241,7 @@ input[type="color"]::-webkit-color-swatch {
         flex: 1 1 auto;
         justify-content: center;
         font-size: 0.75rem;
-        padding: 0.5rem 0.75rem;
+        padding: 0.55rem 0.75rem;
     }
 
     .navigation-tabs {
@@ -1247,37 +1254,275 @@ input[type="color"]::-webkit-color-swatch {
     }
 
     .nav-tab {
-        padding: 0.5rem 0.5rem;
+        padding: 0.55rem 0.5rem;
         font-size: 0.85rem;
         text-align: center;
         justify-content: center;
     }
 
     .roommates-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
         gap: 0.75rem;
         margin-bottom: 1.25rem;
     }
 
     .roommate-card {
         min-height: auto;
-        padding: 1.25rem;
+        padding: 1rem;
+    }
+
+    .roommate-card .roommate-quick-add-btn {
+        opacity: 1;
+        transform: scale(1);
     }
 
     .panel-card {
-        padding: 1.25rem;
+        padding: 1rem;
     }
 
-    .modal-box {
-        padding: 1.25rem;
-        max-height: 95vh;
+    .panel-title {
+        font-size: 1.1rem;
+    }
+
+    .search-filter-bar {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+    }
+
+    .search-filter-bar .input-group {
+        grid-column: 1 / -1;
+    }
+
+    .transaction-list {
+        max-height: 450px;
+    }
+
+    .analytics-view {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---- Phone breakpoint ---- */
+@media (max-width: 480px) {
+    .container {
+        padding: 0.625rem;
+    }
+
+    /* -- Body bottom padding for FAB -- */
+    body {
+        padding-bottom: 6rem;
+    }
+
+    header {
+        padding: 1rem 0.75rem;
+        margin-bottom: 1rem;
+        border-radius: 12px;
+        gap: 0.75rem;
+    }
+
+    .logo-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+    }
+
+    .logo-text h1 {
+        font-size: 1.15rem;
+    }
+
+    .logo-text p {
+        font-size: 0.6rem;
+        letter-spacing: 0.1em;
+    }
+
+    .actions-group {
+        gap: 0.4rem;
+    }
+
+    .actions-group .btn {
+        font-size: 0.7rem;
+        padding: 0.45rem 0.6rem;
+        border-radius: 8px;
+    }
+
+    /* Hide button text labels on very small screens, keep icons */
+    .actions-group .btn i + br,
+    .actions-group .btn {
+        white-space: nowrap;
+    }
+
+    #header-user-identity {
+        width: 100%;
+        justify-content: center;
+        font-size: 0.725rem !important;
+        padding: 0.35rem 0.6rem !important;
+    }
+
+    /* -- Navigation -- */
+    .navigation-tabs {
+        margin-bottom: 1rem;
+        border-radius: 10px;
+        gap: 0.25rem;
+    }
+
+    .nav-tab {
+        padding: 0.5rem 0.35rem;
+        font-size: 0.775rem;
+        gap: 0.3rem;
+        border-radius: 7px;
+    }
+
+    .nav-tab i {
+        width: 14px;
+        height: 14px;
+    }
+
+    /* -- Roommate Cards -- */
+    .roommates-grid {
+        grid-template-columns: 1fr;
+        gap: 0.625rem;
+        margin-bottom: 1rem;
+    }
+
+    .roommate-card {
+        padding: 1rem;
+        border-radius: 12px;
+        flex-direction: row;
+        align-items: center;
+        gap: 1rem;
+        min-height: auto;
+    }
+
+    .roommate-card:hover {
+        transform: none;
+    }
+
+    .roommate-card .roommate-quick-add-btn {
+        opacity: 1;
+        transform: scale(1);
+        position: relative;
+        top: auto;
+        right: auto;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        flex-shrink: 0;
+    }
+
+    .roommate-avatar {
+        width: 34px;
+        height: 34px;
+        font-size: 0.95rem;
+    }
+
+    .roommate-name {
+        font-size: 1rem;
+    }
+
+    .roommate-balance-info {
+        margin-top: 0.5rem;
+    }
+
+    .roommate-balance-list {
+        font-size: 0.8rem;
+    }
+
+    /* -- Panel Cards & Workspace -- */
+    .workspace-grid {
+        gap: 1rem;
+    }
+
+    .panel-card {
+        padding: 0.875rem;
+        border-radius: 12px;
+    }
+
+    .panel-header {
+        margin-bottom: 1rem;
+        gap: 0.5rem;
+    }
+
+    .panel-title {
+        font-size: 1rem;
+        gap: 0.35rem;
+    }
+
+    .panel-title i {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* -- Search & Filter Bar -- */
+    .search-filter-bar {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .search-filter-bar .input-group {
+        grid-column: auto;
+    }
+
+    .form-control {
+        padding: 0.7rem 0.9rem;
+        font-size: 0.875rem;
+        border-radius: 10px;
+        /* Prevent iOS zoom */
+        font-size: 16px;
+    }
+
+    .input-group .form-control {
+        padding-left: 2.5rem;
+    }
+
+    .input-group i {
+        left: 0.9rem;
+    }
+
+    /* -- Transaction Items -- */
+    .transaction-list {
+        max-height: none;
+        gap: 0.5rem;
+        padding-right: 0;
     }
 
     .transaction-item {
         flex-direction: column;
         align-items: flex-start;
-        gap: 1rem;
-        padding: 1rem;
+        gap: 0.75rem;
+        padding: 0.875rem;
+        border-radius: 12px;
+    }
+
+    .transaction-item:hover {
+        transform: none;
+    }
+
+    .tx-main-info {
+        max-width: 100%;
+        width: 100%;
+        gap: 0.65rem;
+    }
+
+    .tx-icon-wrap {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        font-size: 1rem;
+    }
+
+    .tx-title {
+        font-size: 0.875rem;
+    }
+
+    .tx-meta-info {
+        font-size: 0.7rem;
+        gap: 0.35rem;
+    }
+
+    .badge {
+        font-size: 0.625rem;
+        padding: 0.1rem 0.35rem;
     }
 
     .tx-value-block {
@@ -1286,14 +1531,317 @@ input[type="color"]::-webkit-color-swatch {
         justify-content: space-between;
         align-items: center;
         border-top: 1px solid rgba(255, 255, 255, 0.04);
-        padding-top: 0.75rem;
+        padding-top: 0.6rem;
     }
 
+    .tx-amt-value {
+        font-size: 1rem;
+    }
+
+    /* Always show action buttons on touch devices */
+    .tx-actions-buttons {
+        opacity: 1;
+        gap: 0.35rem;
+    }
+
+    .btn-icon-action {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+    }
+
+    /* -- Debt Board -- */
+    .debts-summary-box {
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 10px;
+    }
+
+    .debts-summary-title {
+        font-size: 0.9rem;
+        margin-bottom: 0.6rem;
+    }
+
+    .debt-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.75rem;
+        border-radius: 10px;
+    }
+
+    .debt-transfer-desc {
+        font-size: 0.8rem;
+    }
+
+    .debt-amount-settle {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .debt-amt {
+        font-size: 1rem;
+    }
+
+    .btn-settle-mini {
+        padding: 0.4rem 0.85rem;
+        font-size: 0.8rem;
+        border-radius: 8px;
+    }
+
+    /* -- Modals -- */
+    .modal-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .modal-box {
+        padding: 1.25rem;
+        border-radius: 20px 20px 0 0;
+        max-width: 100%;
+        max-height: 92vh;
+        width: 100%;
+        animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+
+    .modal-overlay.active .modal-box {
+        transform: none;
+    }
+
+    .modal-header {
+        margin-bottom: 1.25rem;
+    }
+
+    .modal-title {
+        font-size: 1.2rem;
+    }
+
+    .btn-close {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Modal form grids should stack */
+    .modal-box [style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        font-size: 0.775rem;
+        margin-bottom: 0.35rem;
+    }
+
+    /* Segment buttons */
+    .btn-segments {
+        gap: 0.15rem;
+    }
+
+    .segment-btn {
+        padding: 0.55rem 0.25rem;
+        font-size: 0.725rem;
+    }
+
+    /* Split options */
+    .split-config-container {
+        padding: 0.75rem;
+    }
+
+    .split-member-row {
+        gap: 0.5rem;
+    }
+
+    .split-input-wrapper {
+        width: 90px;
+    }
+
+    /* Form footer */
+    .form-footer {
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+    }
+
+    .form-footer .btn {
+        width: 100%;
+        justify-content: center;
+        padding: 0.75rem;
+        font-size: 0.9rem;
+        border-radius: 12px;
+    }
+
+    /* Reorder: primary button first visually */
+    .form-footer .btn-primary {
+        order: -1;
+    }
+
+    /* Onboarding */
+    .wizard-title {
+        font-size: 1.35rem;
+    }
+
+    .onboarding-member-row {
+        grid-template-columns: 1fr 40px auto;
+        gap: 0.5rem;
+    }
+
+    /* Color input on mobile */
+    input[type="color"] {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* -- Charts -- */
+    .chart-container-wrap {
+        height: 240px;
+    }
+
+    .chart-card {
+        padding: 1rem;
+        border-radius: 12px;
+    }
+
+    /* -- Toast -- */
     .toast {
-        bottom: 1rem;
-        right: 1rem;
-        left: 1rem;
+        bottom: 5rem;
+        right: 0.625rem;
+        left: 0.625rem;
         width: auto;
         justify-content: center;
+        border-radius: 12px;
+        padding: 0.875rem 1rem;
+        font-size: 0.825rem;
+    }
+
+    /* -- Floating Add Transaction Button (FAB) -- */
+    #btn-add-transaction {
+        position: fixed;
+        bottom: 1.25rem;
+        right: 1.25rem;
+        z-index: 50;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        padding: 0;
+        box-shadow: 0 6px 24px rgba(99, 102, 241, 0.45);
+        font-size: 0;
+        overflow: hidden;
+    }
+
+    #btn-add-transaction i {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* Hide the label text inside FAB */
+    #btn-add-transaction::after {
+        content: none;
+    }
+
+    /* -- Empty states -- */
+    .empty-placeholder {
+        padding: 2rem 1rem;
+    }
+
+    .empty-placeholder i {
+        font-size: 1.75rem;
+    }
+
+    .empty-placeholder p {
+        font-size: 0.8rem;
+    }
+
+    /* -- Identity modal on mobile -- */
+    #identity-modal .modal-box {
+        text-align: center;
+        border-radius: 20px 20px 0 0;
+        max-width: 100%;
+    }
+
+    .identity-select-btn {
+        padding: 0.95rem 1.1rem;
+        font-size: 0.9rem;
+        border-radius: 12px;
     }
 }
+
+/* Touch-device improvements (any pointer:coarse) */
+@media (hover: none) and (pointer: coarse) {
+    /* Always show quick-add on touch */
+    .roommate-card .roommate-quick-add-btn {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    /* Always show transaction action buttons */
+    .tx-actions-buttons {
+        opacity: 1;
+    }
+
+    /* Disable hover-only transforms that feel jittery on touch */
+    .roommate-card:hover {
+        transform: none;
+    }
+
+    .transaction-item:hover {
+        transform: none;
+    }
+
+    .btn:hover {
+        transform: none;
+    }
+
+    .btn-primary:hover {
+        transform: none;
+    }
+
+    .btn-secondary:hover {
+        transform: none;
+    }
+
+    /* Bigger touch targets for icon buttons */
+    .btn-icon-action {
+        width: 36px;
+        height: 36px;
+    }
+
+    .btn-settle-mini {
+        padding: 0.4rem 0.85rem;
+        min-height: 36px;
+    }
+
+    /* Add active state feedback for touch */
+    .btn:active {
+        transform: scale(0.97);
+        transition: transform 0.08s ease;
+    }
+
+    .roommate-card:active {
+        transform: scale(0.98);
+        transition: transform 0.1s ease;
+    }
+
+    .transaction-item:active {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .identity-select-btn:active {
+        transform: scale(0.98);
+    }
+
+    .btn-settle-mini:active {
+        transform: scale(0.95);
+        background: var(--accent-green);
+        color: white;
+    }
+}
+
