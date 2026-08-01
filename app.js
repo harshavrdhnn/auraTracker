@@ -1,54 +1,87 @@
-// Default Roommate Palette
-const ROOMMATE_PALETTE = [
-    "#6366f1", // Indigo
-    "#ec4899", // Pink
-    "#10b981", // Emerald
-    "#f59e0b", // Amber
-    "#3b82f6", // Blue
-    "#8b5cf6"  // Violet
-];
+// app.js
+// Monolithic controller for Aura Tracker split calculations, local caching, and Firebase RTDB sync
 
-// App State
+const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCs8VgAr7bQoxv5vIVrnfG5opPWa9eDkuE",
+    authDomain: "auratracker-18242.firebaseapp.com",
+    databaseURL: "https://auratracker-18242-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "auratracker-18242",
+    storageBucket: "auratracker-18242.firebasestorage.app",
+    messagingSenderId: "757820673078",
+    appId: "1:757820673078:web:176d48e26e6be657d31c97"
+};
+
+// Global State Object
 let state = {
-    currentUser: "", // Bound identity of this roommate on this device
-    roommates: [], // Array of { name: string, color: string }
-    transactions: [], // Array of transactions
+    currentUser: "", // name of current user bound to this browser cache
+    userEmail: "", // email of authenticated user
+    roommates: [], // List of roommate objects: { name, color }
+    transactions: [], // List of transaction objects
     settings: {
-        syncKey: "",
-        firebaseConfig: ""
+        syncKey: ""
     },
+    activeTab: "ledger", // active navigation tab: ledger, analytics
     filters: {
         search: "",
         payer: "all",
-        category: "all"
-    },
-    activeTab: "ledger" // "ledger" | "analytics"
+        category: "all",
+        sort: "date-desc"
+    }
 };
 
-// Chart.js Instances
-let payerChartInstance = null;
-let categoryChartInstance = null;
+const ROOMMATES_COLORS = ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#3b82f6", "#8b5cf6"];
+const ROOMMATE_PALETTE = ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#3b82f6", "#8b5cf6"];
 
 // Firebase Globals
 let firebaseApp = null;
 let firebaseDb = null;
 let firebaseSyncRef = null;
 
+// Auth Modes
+let isCreatorMode = false;
+let isDemoMode = false;
+
 // DOM loaded entrypoint
 document.addEventListener("DOMContentLoaded", () => {
     loadData();
-    checkUrlHashConfig();   // legacy #config= support
-    checkInviteCode();      // new ?invite=CODE support
     initFirebase();
     initEventListeners();
 
-    if (state.roommates.length === 0) {
-        // Fresh install — show the landing page
-        showLandingPage();
+    // Firebase Auth State Listener
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                state.userEmail = user.email || "";
+                document.getElementById("settings-user-email").textContent = user.email || "Authenticated User";
+                
+                // If we are in the middle of onboarding step 2 (auth), advance to step 3 (key input)
+                const currentStep = getCurrentLoginStep();
+                if (currentStep === "auth" && isCreatorMode) {
+                    showLoginStep("key");
+                }
+            } else {
+                state.userEmail = "";
+                document.getElementById("settings-user-email").textContent = "Not Logged In";
+            }
+        });
+    }
+
+    // Check hash configs or invite parameters
+    const hash = window.location.hash;
+    const params = new URLSearchParams(window.location.search);
+    
+    if (hash && hash.startsWith("#config=")) {
+        checkUrlHashConfig();
+    } else if (params.has("invite")) {
+        checkInviteCode();
     } else {
-        // Returning user — go straight to the app
-        showMainApp();
-        renderAll();
+        if (!state.settings.syncKey) {
+            // Fresh install — show the login welcome portal
+            showLoginPortal();
+        } else {
+            // Returning user — go straight to the app
+            showMainApp(false);
+        }
     }
 });
 
@@ -64,15 +97,52 @@ const SAMPLE_TRANSACTIONS = [
     { id: "s3", type: "expense", amount: 600,  date: "2026-07-12", description: "Grocery Run",    paidBy: "Sushman", category: "Groceries", splits: { "Harsha": 200,  "Janaki": 200,  "Sushman": 200  }, splitType: "equal", deleted: false }
 ];
 
-let isDemoMode = false;
-
-function showLandingPage() {
-    document.getElementById("landing-page").style.display = "block";
+function showLoginPortal() {
+    document.getElementById("login-portal").style.display = "block";
     document.getElementById("main-app").style.display = "none";
     document.getElementById("bottom-nav").style.display = "none";
     document.getElementById("header-actions").style.display = "none";
     document.body.classList.remove("has-bottom-nav");
+    showLoginStep("welcome");
+}
+
+function showLoginStep(step) {
+    document.querySelectorAll(".login-step").forEach(el => el.style.display = "none");
+    document.getElementById(`login-step-${step}`).style.display = "block";
+    
+    if (step === "key") {
+        const titleEl = document.getElementById("key-step-title");
+        const subtitleEl = document.getElementById("key-step-subtitle");
+        const descEl = document.getElementById("key-input-description");
+        const btnEl = document.getElementById("btn-submit-key");
+        const keyInput = document.getElementById("input-aura-key");
+        
+        keyInput.value = "";
+        document.getElementById("key-validation-feedback").style.display = "none";
+        btnEl.disabled = true;
+
+        if (isCreatorMode) {
+            titleEl.textContent = "Create Aura Key";
+            subtitleEl.textContent = "Choose a unique passcode for your new notebook.";
+            descEl.textContent = "Your roommates will use this unique key to synchronize with your notebook.";
+            btnEl.textContent = "Create Notebook →";
+        } else {
+            titleEl.textContent = "Enter Aura Key";
+            subtitleEl.textContent = "Join an existing roommates notebook.";
+            descEl.textContent = "Enter the Sync Passcode your roommate generated to link your devices.";
+            btnEl.textContent = "Join Notebook →";
+        }
+    }
     if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function getCurrentLoginStep() {
+    const steps = ["welcome", "auth", "key"];
+    for (let s of steps) {
+        const el = document.getElementById(`login-step-${s}`);
+        if (el && el.style.display === "block") return s;
+    }
+    return null;
 }
 
 // demoState is ONLY used for read-only rendering — never written to localStorage or Firebase
@@ -83,7 +153,7 @@ const demoState = {
 
 function showMainApp(demo = false) {
     isDemoMode = demo;
-    document.getElementById("landing-page").style.display = "none";
+    document.getElementById("login-portal").style.display = "none";
     document.getElementById("main-app").style.display = "block";
     document.getElementById("bottom-nav").style.display = "flex";
     document.getElementById("header-actions").style.display = demo ? "none" : "flex";
@@ -127,7 +197,7 @@ function loadData() {
             state.settings = JSON.parse(settingsSaved);
         } catch (e) {
             console.error("Failed to parse settings.", e);
-            state.settings = { syncKey: "", firebaseConfig: "" };
+            state.settings = { syncKey: "" };
         }
     }
 }
@@ -164,36 +234,39 @@ function pushToFirebase() {
     }
 }
 
-// Tolerant Firebase config parser — handles JS object literals from Firebase console
-function parseFirebaseConfig(raw) {
-    if (!raw) return null;
-    let str = raw.trim();
-
-    // Strip "const firebaseConfig = " or "var firebaseConfig = " prefix
-    str = str.replace(/^(const|var|let)\s+\w+\s*=\s*/, "");
-
-    // Strip trailing semicolon
-    str = str.replace(/;$/, "").trim();
-
-    // First try strict JSON parse
+// Check if an Aura Key passcode already has an active database session
+function checkAuraKeyExists(key) {
     try {
-        return JSON.parse(str);
-    } catch (_) {}
-
-    // Fall back: use Function constructor to evaluate JS object literal safely
-    try {
-        // eslint-disable-next-line no-new-func
-        const result = new Function("return " + str)();
-        if (result && typeof result === "object") return result;
-    } catch (_) {}
-
-    return null;
+        if (typeof firebase === 'undefined') {
+            return Promise.resolve(false);
+        }
+        const app = firebaseApp || (firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG));
+        const db = firebase.database(app);
+        return db.ref(`aura_tracker/${key}`).once("value").then(snapshot => {
+            return snapshot.exists();
+        });
+    } catch (e) {
+        console.error("Firebase key lookup check failed:", e);
+        return Promise.resolve(false);
+    }
 }
 
-// Initialize Firebase Database Connections
+// Initialize Firebase Database Connections using locked global config
 function initFirebase() {
-    const configStr = state.settings.firebaseConfig;
     const syncKey = state.settings.syncKey;
+
+    // Always make sure default Firebase App is initialized for Auth and general SDK usage
+    if (typeof firebase !== 'undefined') {
+        try {
+            if (firebase.apps.length === 0) {
+                firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+            } else {
+                firebaseApp = firebase.app();
+            }
+        } catch (e) {
+            console.error("Firebase App initialization failed:", e);
+        }
+    }
 
     // Disconnect old listener if active
     if (firebaseSyncRef) {
@@ -201,58 +274,19 @@ function initFirebase() {
         firebaseSyncRef = null;
     }
 
-    if (!configStr) {
-        console.log("Firebase config not set. Running offline mode.");
+    if (!syncKey) {
+        console.log("No Sync Key defined. Database listening deferred.");
         return;
     }
 
-    // Use passcode as sync path, fallback to project ID derived from config
-    let resolvedSyncKey = syncKey;
-    if (!resolvedSyncKey) {
-        const tempConfig = parseFirebaseConfig(configStr);
-        resolvedSyncKey = (tempConfig && tempConfig.projectId) ? tempConfig.projectId : "default";
-    }
-
     try {
-        // Parse config — tolerant of JS object literal format from Firebase console
-        // (unquoted keys, trailing commas, or with "const firebaseConfig = " prefix)
-        const config = parseFirebaseConfig(configStr);
-
-        if (!config) {
-            showToast("Firebase config JSON is invalid. Paste just the { } block.", "error");
-            return;
-        }
-
-        if (!config.databaseURL) {
-            showToast("Firebase config is missing 'databaseURL'. Please check your config JSON.", "error");
-            return;
-        }
-
-        if (typeof firebase !== 'undefined') {
-            // Always delete existing apps and re-init cleanly to avoid stale connections
-            const deleteExisting = firebase.apps.length > 0
-                ? firebase.app().delete()
-                : Promise.resolve();
-
-            deleteExisting.then(() => {
-                firebaseApp = firebase.initializeApp(config);
-                setupFirebaseListener(resolvedSyncKey, firebaseApp);
-            }).catch(err => {
-                console.warn("Error deleting previous Firebase app:", err);
-                // Try initializing anyway
-                try {
-                    firebaseApp = firebase.initializeApp(config);
-                } catch(_) {
-                    firebaseApp = firebase.app();
-                }
-                setupFirebaseListener(resolvedSyncKey, firebaseApp);
-            });
+        if (typeof firebase !== 'undefined' && firebaseApp) {
+            setupFirebaseListener(syncKey, firebaseApp);
         } else {
-            showToast("Firebase SDK not loaded. Check your internet connection.", "error");
+            console.warn("Firebase SDK not loaded. Check internet connection.");
         }
     } catch (e) {
-        console.error("Firebase initialization failed:", e);
-        showToast("Firebase config JSON is invalid. Please verify it.", "error");
+        console.error("Firebase Database listener connection failed:", e);
     }
 }
 
@@ -318,6 +352,14 @@ function setupFirebaseListener(syncKey, app) {
             saveToLocalStorage();
             renderAll();
 
+            // If user has connected to a sync key but has not selected an identity, prompt them
+            if (state.currentUser === "" && state.roommates.length > 0 && !isDemoMode) {
+                const modal = document.getElementById("identity-modal");
+                if (modal && !modal.classList.contains("active")) {
+                    openIdentityModal();
+                }
+            }
+
             // If we merged newer local edits or offline entries, push back to Firebase
             if (needPushBack) {
                 console.log("Local updates detected. Pushing updated state back to Firebase.");
@@ -374,24 +416,180 @@ function checkUrlHashConfig() {
 }
 
 // -------------------------------------------------------------
-// EVENT LISTENERS INITIALIZATION
-// -------------------------------------------------------------
 function initEventListeners() {
-    // ── Landing page ──
-    document.getElementById("btn-landing-create").addEventListener("click", () => {
-        showOnboardingWizard();
+    // ── Login Portal Steps ──
+    document.getElementById("btn-login-opt-join").addEventListener("click", () => {
+        isCreatorMode = false;
+        showLoginStep("key");
     });
-    document.getElementById("btn-landing-demo").addEventListener("click", () => {
+
+    document.getElementById("btn-login-opt-create").addEventListener("click", () => {
+        isCreatorMode = true;
+        if (state.userEmail || (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)) {
+            showLoginStep("key");
+        } else {
+            showLoginStep("auth");
+        }
+    });
+
+    document.getElementById("btn-login-opt-demo").addEventListener("click", () => {
         showMainApp(true);
     });
+
     document.getElementById("btn-banner-create-notebook").addEventListener("click", () => {
         if (isDemoMode) {
-            // Reset demo state and go to onboarding
             state.roommates = [];
             state.transactions = [];
             isDemoMode = false;
         }
-        showOnboardingWizard();
+        isCreatorMode = true;
+        if (state.userEmail || (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)) {
+            showLoginStep("key");
+        } else {
+            showLoginStep("auth");
+        }
+    });
+
+    // ── Auth Step Handlers ──
+    document.getElementById("btn-google-signin").addEventListener("click", () => {
+        if (typeof firebase === 'undefined' || !firebase.auth) {
+            showToast("Firebase Auth SDK not loaded.", "error");
+            return;
+        }
+        const provider = new firebase.auth.GoogleAuthProvider();
+        firebase.auth().signInWithPopup(provider).then(() => {
+            showToast("Successfully authenticated with Google!", "success");
+            if (isCreatorMode) {
+                showLoginStep("key");
+            }
+        }).catch(err => {
+            console.error("Google authentication failed:", err);
+            // Fallback to redirect if popup blocked
+            if (err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user") {
+                firebase.auth().signInWithRedirect(provider);
+            } else {
+                showToast("Google authentication failed. Please try email sign-in.", "error");
+            }
+        });
+    });
+
+    document.getElementById("email-auth-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const email = document.getElementById("auth-email").value.trim();
+        const password = document.getElementById("auth-password").value;
+
+        if (typeof firebase === 'undefined' || !firebase.auth) {
+            showToast("Firebase Auth SDK not loaded.", "error");
+            return;
+        }
+
+        showToast("Authenticating email...", "success");
+        firebase.auth().signInWithEmailAndPassword(email, password)
+            .then(() => {
+                showToast("Logged in successfully!", "success");
+                if (isCreatorMode) showLoginStep("key");
+            })
+            .catch(err => {
+                // If user doesn't exist, automatically sign up
+                if (err.code === "auth/user-not-found") {
+                    firebase.auth().createUserWithEmailAndPassword(email, password)
+                        .then(() => {
+                            showToast("Account created successfully!", "success");
+                            if (isCreatorMode) showLoginStep("key");
+                        })
+                        .catch(signupErr => {
+                            console.error("Signup failed:", signupErr);
+                            showToast(signupErr.message, "error");
+                        });
+                } else {
+                    console.error("Login failed:", err);
+                    showToast(err.message, "error");
+                }
+            });
+    });
+
+    document.getElementById("btn-auth-back").addEventListener("click", () => {
+        showLoginStep("welcome");
+    });
+
+    // ── Key Step Handlers ──
+    let checkTimeout = null;
+    document.getElementById("input-aura-key").addEventListener("input", (e) => {
+        const val = e.target.value.trim().toLowerCase();
+        const feedback = document.getElementById("key-validation-feedback");
+        const submitBtn = document.getElementById("btn-submit-key");
+        
+        feedback.style.display = "none";
+        submitBtn.disabled = true;
+
+        if (checkTimeout) clearTimeout(checkTimeout);
+
+        if (!val || val.length < 4) {
+            feedback.className = "invalid";
+            feedback.textContent = "Passcode must be at least 4 characters.";
+            feedback.style.display = "block";
+            return;
+        }
+
+        feedback.className = "checking";
+        feedback.textContent = "Checking passcode...";
+        feedback.style.display = "block";
+
+        checkTimeout = setTimeout(() => {
+            checkAuraKeyExists(val).then(exists => {
+                if (isCreatorMode) {
+                    if (exists) {
+                        feedback.className = "invalid";
+                        feedback.textContent = "❌ Key is already in use. Pick a unique one.";
+                        submitBtn.disabled = true;
+                    } else {
+                        feedback.className = "valid";
+                        feedback.textContent = "✅ Key is available!";
+                        submitBtn.disabled = false;
+                    }
+                } else {
+                    if (exists) {
+                        feedback.className = "valid";
+                        feedback.textContent = "✅ Key found! Ready to join.";
+                        submitBtn.disabled = false;
+                    } else {
+                        feedback.className = "invalid";
+                        feedback.textContent = "❌ Key not found. Check the code or create a new one.";
+                        submitBtn.disabled = true;
+                    }
+                }
+            }).catch(e => {
+                feedback.className = "invalid";
+                feedback.textContent = "Connection check failed. Try again.";
+            });
+        }, 600);
+    });
+
+    document.getElementById("key-setup-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const key = document.getElementById("input-aura-key").value.trim().toLowerCase();
+        if (!key) return;
+
+        state.settings.syncKey = key;
+        saveToLocalStorage();
+        initFirebase();
+
+        if (isCreatorMode) {
+            // Show Onboarding Wizard to setup roommates
+            showOnboardingWizard();
+        } else {
+            // Join notebook — download existing data and prompt identity
+            showToast("⏳ Downloading notebook data...", "success");
+            showMainApp(false);
+        }
+    });
+
+    document.getElementById("btn-key-back").addEventListener("click", () => {
+        if (isCreatorMode) {
+            showLoginStep("auth");
+        } else {
+            showLoginStep("welcome");
+        }
     });
 
     // ── Bottom Nav ──
@@ -437,6 +635,20 @@ function initEventListeners() {
     document.getElementById("btn-settings-close").addEventListener("click", closeSettingsModal);
     document.getElementById("btn-settings-cancel").addEventListener("click", closeSettingsModal);
     document.getElementById("settings-form").addEventListener("submit", handleSaveSettings);
+
+    document.getElementById("btn-settings-logout").addEventListener("click", () => {
+        if (confirm("Are you sure you want to sign out and clear your local session?")) {
+            if (typeof firebase !== 'undefined' && firebase.auth) {
+                firebase.auth().signOut().then(() => {
+                    localStorage.clear();
+                    location.reload();
+                });
+            } else {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+    });
 
     // Onboarding Wizard
     document.getElementById("btn-add-roommate-row").addEventListener("click", () => addRoommateWizardRow("onboarding-roommates-list"));
