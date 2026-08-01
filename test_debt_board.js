@@ -15,6 +15,7 @@ function calculateBalances() {
     });
 
     state.transactions.forEach(tx => {
+        if (tx.deleted) return;
         const amt = parseFloat(tx.amount) || 0;
         if (amt <= 0) return; // Skip zero/negative invalid transactions
 
@@ -55,6 +56,7 @@ function calculatePairwiseDebts() {
     });
 
     state.transactions.forEach(tx => {
+        if (tx.deleted) return;
         const amt = parseFloat(tx.amount) || 0;
         if (amt <= 0) return;
 
@@ -335,5 +337,35 @@ runTestCase(
         { from: "Harsha", to: "Janaki", amount: 3433.33 },
         { from: "Sushman", to: "Harsha", amount: 1233.33 },
         { from: "Sushman", to: "Janaki", amount: 4666.67 }
+    ]
+);
+
+// 9. Soft-deleted transactions
+runTestCase(
+    "9. Soft-deleted transactions (Harsha paid 900 split 3-ways, but then deleted)",
+    () => {
+        state.transactions = [
+            {
+                id: "t9-deleted",
+                type: "expense",
+                amount: 900,
+                paidBy: "Harsha",
+                splits: { "Harsha": 300, "Janaki": 300, "Sushman": 300 },
+                deleted: true
+            },
+            {
+                id: "t9-active",
+                type: "expense",
+                amount: 300,
+                paidBy: "Janaki",
+                splits: { "Harsha": 100, "Janaki": 100, "Sushman": 100 },
+                deleted: false
+            }
+        ];
+    },
+    { "Harsha": -100, "Janaki": 200, "Sushman": -100 },
+    [
+        { from: "Harsha", to: "Janaki", amount: 100 },
+        { from: "Sushman", to: "Janaki", amount: 100 }
     ]
 );

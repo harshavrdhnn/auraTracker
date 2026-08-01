@@ -41,13 +41,61 @@ document.addEventListener("DOMContentLoaded", () => {
     checkInviteCode();      // new ?invite=CODE support
     initFirebase();
     initEventListeners();
-    renderAll();
 
-    // If no roommates configured, show onboarding wizard
     if (state.roommates.length === 0) {
-        showOnboardingWizard();
+        // Fresh install — show the landing page
+        showLandingPage();
+    } else {
+        // Returning user — go straight to the app
+        showMainApp();
+        renderAll();
     }
 });
+
+// ─── Screen Helpers ───────────────────────────────────────────────────────────
+const SAMPLE_ROOMMATES = [
+    { name: "Harsha",  color: "#6366f1" },
+    { name: "Janaki",  color: "#ec4899" },
+    { name: "Sushman", color: "#10b981" }
+];
+const SAMPLE_TRANSACTIONS = [
+    { id: "s1", type: "expense", amount: 4500, date: "2026-07-01", description: "Monthly Rent",    paidBy: "Harsha",  category: "Rent",      splits: { "Harsha": 1500, "Janaki": 1500, "Sushman": 1500 }, splitType: "equal", deleted: false },
+    { id: "s2", type: "expense", amount: 900,  date: "2026-07-05", description: "Electricity Bill",paidBy: "Janaki",  category: "Utilities", splits: { "Harsha": 300,  "Janaki": 300,  "Sushman": 300  }, splitType: "equal", deleted: false },
+    { id: "s3", type: "expense", amount: 600,  date: "2026-07-12", description: "Grocery Run",    paidBy: "Sushman", category: "Groceries", splits: { "Harsha": 200,  "Janaki": 200,  "Sushman": 200  }, splitType: "equal", deleted: false }
+];
+
+let isDemoMode = false;
+
+function showLandingPage() {
+    document.getElementById("landing-page").style.display = "block";
+    document.getElementById("main-app").style.display = "none";
+    document.getElementById("bottom-nav").style.display = "none";
+    document.getElementById("header-actions").style.display = "none";
+    document.body.classList.remove("has-bottom-nav");
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// demoState is ONLY used for read-only rendering — never written to localStorage or Firebase
+const demoState = {
+    roommates: SAMPLE_ROOMMATES,
+    transactions: SAMPLE_TRANSACTIONS
+};
+
+function showMainApp(demo = false) {
+    isDemoMode = demo;
+    document.getElementById("landing-page").style.display = "none";
+    document.getElementById("main-app").style.display = "block";
+    document.getElementById("bottom-nav").style.display = "flex";
+    document.getElementById("header-actions").style.display = demo ? "none" : "flex";
+    document.body.classList.add("has-bottom-nav");
+
+    // IMPORTANT: Demo mode NEVER touches state.roommates or state.transactions
+    // Real user data in state is left completely untouched
+    document.getElementById("demo-notice-banner").style.display = demo ? "flex" : "none";
+
+    renderAll();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
 
 // Load state from local storage cache
 function loadData() {
@@ -94,6 +142,16 @@ function saveToLocalStorage() {
 
 // Push local state edits to Firebase Database
 function pushToFirebase() {
+    // SAFETY: Never push while in demo mode — sample data must never reach Firebase
+    if (isDemoMode) {
+        console.log("[Demo mode] pushToFirebase skipped — sample data is read-only.");
+        return;
+    }
+    // SAFETY: Never push empty roommates (prevents overwrite/race conditions)
+    if (!state.roommates || state.roommates.length === 0) {
+        console.warn("pushToFirebase blocked: Roommate list is empty.");
+        return;
+    }
     if (firebaseDb && state.settings.syncKey) {
         console.log("Pushing updates to Firebase DB under key:", state.settings.syncKey);
         firebaseDb.ref(`aura_tracker/${state.settings.syncKey}`).set({
@@ -210,20 +268,61 @@ function setupFirebaseListener(syncKey, app) {
             if (data === null) {
                 // Firebase path is completely empty (never initialized).
                 // Seed it with local data so other devices can pull.
-                if (state.transactions.length > 0 || state.roommates.length > 0) {
+                if (state.transactions.length > 0 && state.roommates.length > 0) {
                     console.log("Firebase path is new — seeding with local data...");
                     pushToFirebase();
                 }
                 return;
             }
 
-            // Firebase has data — always treat it as source of truth.
-            // This ensures deletions and updates propagate correctly to all devices.
-            console.log("Received remote sync from Firebase RTDB");
-            state.roommates = data.roommates || state.roommates;
-            state.transactions = data.transactions || [];
+            // Firebase has data — perform a smart merge of transaction lists
+            console.log("Received remote sync from Firebase RTDB. Merging...");
+            
+            // Only update roommates if the remote has roommates defined (source of truth)
+            if (data.roommates && data.roommates.length > 0) {
+                state.roommates = data.roommates;
+            }
+
+            const remoteTxs = data.transactions || [];
+            let mergedTxs = [...state.transactions];
+            let needPushBack = false;
+
+            remoteTxs.forEach(remoteTx => {
+                const localIndex = mergedTxs.findIndex(t => t.id === remoteTx.id);
+                if (localIndex === -1) {
+                    // Transaction not present locally, download it
+                    mergedTxs.push(remoteTx);
+                } else {
+                    const localTx = mergedTxs[localIndex];
+                    const localTime = localTx.lastModified || 0;
+                    const remoteTime = remoteTx.lastModified || 0;
+                    if (remoteTime > localTime) {
+                        // Remote transaction has a newer timestamp, download it
+                        mergedTxs[localIndex] = remoteTx;
+                    } else if (localTime > remoteTime) {
+                        // Local version is newer, we need to push it back to remote
+                        needPushBack = true;
+                    }
+                }
+            });
+
+            // Check if there are local transactions not yet present in remote (offline additions)
+            state.transactions.forEach(localTx => {
+                const remoteExists = remoteTxs.some(t => t.id === localTx.id);
+                if (!remoteExists) {
+                    needPushBack = true;
+                }
+            });
+
+            state.transactions = mergedTxs;
             saveToLocalStorage();
             renderAll();
+
+            // If we merged newer local edits or offline entries, push back to Firebase
+            if (needPushBack) {
+                console.log("Local updates detected. Pushing updated state back to Firebase.");
+                pushToFirebase();
+            }
 
         }, (error) => {
             console.error("Firebase listener error:", error);
@@ -278,10 +377,36 @@ function checkUrlHashConfig() {
 // EVENT LISTENERS INITIALIZATION
 // -------------------------------------------------------------
 function initEventListeners() {
-    // Navigation Tabs Switching
-    document.getElementById("tab-btn-ledger").addEventListener("click", () => switchTab("ledger"));
-    document.getElementById("tab-btn-analytics").addEventListener("click", () => switchTab("analytics"));
+    // ── Landing page ──
+    document.getElementById("btn-landing-create").addEventListener("click", () => {
+        showOnboardingWizard();
+    });
+    document.getElementById("btn-landing-demo").addEventListener("click", () => {
+        showMainApp(true);
+    });
+    document.getElementById("btn-banner-create-notebook").addEventListener("click", () => {
+        if (isDemoMode) {
+            // Reset demo state and go to onboarding
+            state.roommates = [];
+            state.transactions = [];
+            isDemoMode = false;
+        }
+        showOnboardingWizard();
+    });
 
+    // ── Bottom Nav ──
+    document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const tab = btn.dataset.tab;
+            if (tab === "roommates") {
+                openRoommatesManagerModal();
+            } else {
+                switchTab(tab);
+            }
+        });
+    });
+
+    // Navigation Tabs Switching (kept for compatibility, handled by bottom-nav now)
     // Quick add dialogs
     document.getElementById("btn-add-transaction").addEventListener("click", () => openTransactionModal());
     document.getElementById("btn-modal-close").addEventListener("click", closeTransactionModal);
@@ -352,19 +477,39 @@ function initEventListeners() {
 // -------------------------------------------------------------
 // UI VIEW RENDERING & CONTROLLERS
 // -------------------------------------------------------------
+// Returns the correct data source: demo data when in demo mode, real state otherwise
+function activeData() {
+    if (isDemoMode) return demoState;
+    return state;
+}
+
 function renderAll() {
+    // In demo mode, temporarily swap rendering refs so all child renders use sample data
+    // without ever modifying the real state object
+    const _roommates = state.roommates;
+    const _transactions = state.transactions;
+    if (isDemoMode) {
+        state.roommates = demoState.roommates;
+        state.transactions = demoState.transactions;
+    }
+
     renderUserIdentityHeader();
     renderRoommatesFilterOptions();
     renderRoommateCards();
     renderTransactionList();
     renderSettleDebtsBoard();
     renderInsightsWidget();
-    
+
     if (state.activeTab === "analytics") {
         renderCharts();
     }
-    
-    // Trigger Lucide CDN to render SVG icons
+
+    // Restore real state after rendering (only matters in demo mode)
+    if (isDemoMode) {
+        state.roommates = _roommates;
+        state.transactions = _transactions;
+    }
+
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
@@ -447,27 +592,25 @@ function openIdentityModal() {
 // Switch tabs view
 function switchTab(tab) {
     state.activeTab = tab;
-    
-    const tabLedgerBtn = document.getElementById("tab-btn-ledger");
-    const tabAnalyticsBtn = document.getElementById("tab-btn-analytics");
-    const viewLedgerEl = document.getElementById("view-ledger");
+
+    const viewLedgerEl   = document.getElementById("view-ledger");
     const viewAnalyticsEl = document.getElementById("view-analytics");
 
     if (tab === "ledger") {
-        tabLedgerBtn.classList.add("active");
-        tabAnalyticsBtn.classList.remove("active");
         viewLedgerEl.style.display = "block";
         viewAnalyticsEl.style.display = "none";
     } else {
-        tabLedgerBtn.classList.remove("active");
-        tabAnalyticsBtn.classList.add("active");
         viewLedgerEl.style.display = "none";
         viewAnalyticsEl.style.display = "grid";
         renderCharts();
     }
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
+
+    // Update bottom nav active state
+    document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.tab === tab);
+    });
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // Populate filters selection items
@@ -494,6 +637,7 @@ function calculateBalances() {
     });
 
     state.transactions.forEach(tx => {
+        if (tx.deleted) return;
         const amt = parseFloat(tx.amount) || 0;
         if (tx.type === "expense") {
             // Payer gets credit for total paid
@@ -658,6 +802,7 @@ function calculatePairwiseDebts() {
     });
 
     state.transactions.forEach(tx => {
+        if (tx.deleted) return;
         const amt = parseFloat(tx.amount) || 0;
         if (amt <= 0) return;
 
@@ -761,6 +906,7 @@ function renderTransactionList() {
     const catFilter = state.filters.category;
 
     const filtered = state.transactions.filter(tx => {
+        if (tx.deleted) return false;
         // Search description
         if (query && !tx.description.toLowerCase().includes(query)) return false;
         
@@ -1322,7 +1468,9 @@ function handleSaveTransaction(e) {
         type: type,
         amount: amount,
         date: date,
-        description: description
+        description: description,
+        lastModified: Date.now(),
+        deleted: false
     };
 
     if (type === "expense") {
@@ -1386,14 +1534,14 @@ function handleSaveTransaction(e) {
 
         } else if (splitType === "percent") {
             let sumPct = 0;
+            let checkedRoomies = [];
             rows.forEach(row => {
                 const cb = row.querySelector(".split-member-checkbox");
-                const pct = parseFloat(row.querySelector(".split-pct-input").value) || 0;
                 if (cb && cb.checked) {
+                    checkedRoomies.push(row.dataset.name);
+                    const pct = parseFloat(row.querySelector(".split-pct-input").value) || 0;
                     sumPct += pct;
                     splitInputs[row.dataset.name] = pct;
-                    const calculatedShare = Math.round((amount * (pct / 100)) * 100) / 100;
-                    splits[row.dataset.name] = calculatedShare;
                 }
             });
 
@@ -1402,14 +1550,29 @@ function handleSaveTransaction(e) {
                 return;
             }
 
+            let sumCalculated = 0;
+            checkedRoomies.forEach(name => {
+                const pct = splitInputs[name];
+                const shareAmt = Math.round((amount * (pct / 100)) * 100) / 100;
+                splits[name] = shareAmt;
+                sumCalculated += shareAmt;
+            });
+
+            let remainder = Math.round((amount - sumCalculated) * 100) / 100;
+            if (remainder !== 0 && checkedRoomies.length > 0) {
+                splits[checkedRoomies[0]] = Math.round((splits[checkedRoomies[0]] + remainder) * 100) / 100;
+            }
+
         } else if (splitType === "shares") {
             let totalShares = 0;
+            let checkedRoomies = [];
             rows.forEach(row => {
                 const cb = row.querySelector(".split-member-checkbox");
-                const sh = parseFloat(row.querySelector(".split-shares-input").value) || 0;
                 if (cb && cb.checked) {
+                    const sh = parseFloat(row.querySelector(".split-shares-input").value) || 0;
                     totalShares += sh;
                     splitInputs[row.dataset.name] = sh;
+                    checkedRoomies.push(row.dataset.name);
                 }
             });
 
@@ -1418,14 +1581,18 @@ function handleSaveTransaction(e) {
                 return;
             }
 
-            rows.forEach(row => {
-                const cb = row.querySelector(".split-member-checkbox");
-                const sh = parseFloat(row.querySelector(".split-shares-input").value) || 0;
-                if (cb && cb.checked) {
-                    const shareAmt = Math.round((amount * (sh / totalShares)) * 100) / 100;
-                    splits[row.dataset.name] = shareAmt;
-                }
+            let sumCalculated = 0;
+            checkedRoomies.forEach(name => {
+                const sh = splitInputs[name];
+                const shareAmt = Math.round((amount * (sh / totalShares)) * 100) / 100;
+                splits[name] = shareAmt;
+                sumCalculated += shareAmt;
             });
+
+            let remainder = Math.round((amount - sumCalculated) * 100) / 100;
+            if (remainder !== 0 && checkedRoomies.length > 0) {
+                splits[checkedRoomies[0]] = Math.round((splits[checkedRoomies[0]] + remainder) * 100) / 100;
+            }
         }
 
         transactionData.splits = splits;
@@ -1540,7 +1707,11 @@ function deleteTransaction(id, paidBy) {
         return;
     }
     if (confirm("Are you sure you want to delete this transaction?")) {
-        state.transactions = state.transactions.filter(t => t.id !== id);
+        const tx = state.transactions.find(t => t.id === id);
+        if (tx) {
+            tx.deleted = true;
+            tx.lastModified = Date.now();
+        }
         saveToLocalStorage();
         pushToFirebase();
         renderAll();
@@ -1576,9 +1747,6 @@ function handleSaveSettings(e) {
 
     saveToLocalStorage();
     initFirebase();
-    
-    // Perform initial push to populate database if sync active
-    pushToFirebase();
     
     renderAll();
     closeSettingsModal();
@@ -1858,11 +2026,12 @@ function handleSaveOnboarding(e) {
 
     state.roommates = roomies;
     state.currentUser = selectedUser;
-    
+    isDemoMode = false;
+
     saveToLocalStorage();
-    renderAll();
-    
+
     document.getElementById("onboarding-modal").classList.remove("active");
+    showMainApp(false);
     showToast(`Workspace initialized. Welcome ${selectedUser}!`, "success");
 }
 

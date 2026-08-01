@@ -17,7 +17,7 @@
 <body>
     <div class="container">
         <!-- Dashboard Header -->
-        <header>
+        <header id="app-header">
             <div class="logo-section">
                 <div class="logo-icon">
                     <i data-lucide="scale"></i>
@@ -28,7 +28,7 @@
                 </div>
             </div>
             
-            <div class="actions-group">
+            <div class="actions-group" id="header-actions">
                 <!-- Active Identity Indicator Badge -->
                 <div id="header-user-identity" style="display: none; align-items: center; gap: 0.5rem; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.8125rem;">
                     <span style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; font-weight: 500;">Device:</span>
@@ -46,13 +46,58 @@
             </div>
         </header>
 
-        <!-- Navigation Tabs -->
-        <div class="navigation-tabs">
-            <button class="nav-tab active" id="tab-btn-ledger">
-                <i data-lucide="wallet"></i> Balances & Ledger
-            </button>
-            <button class="nav-tab" id="tab-btn-analytics">
-                <i data-lucide="pie-chart"></i> Spending Analytics
+        <!-- ================= LANDING PAGE ================= -->
+        <section id="landing-page" style="display: none;">
+            <div class="landing-hero">
+                <div class="landing-logo-wrap">
+                    <div class="landing-logo-icon">
+                        <i data-lucide="scale"></i>
+                    </div>
+                    <div class="landing-glow"></div>
+                </div>
+                <h2 class="landing-title">Welcome to Aura Tracker</h2>
+                <p class="landing-subtitle">Track shared expenses with your roommates — simple, honest, and real-time.</p>
+            </div>
+
+            <div class="landing-cards">
+                <button class="landing-card landing-card-primary" id="btn-landing-create">
+                    <div class="landing-card-icon">
+                        <i data-lucide="plus-circle"></i>
+                    </div>
+                    <div class="landing-card-text">
+                        <strong>Create New Notebook</strong>
+                        <span>Set up roommates and start tracking</span>
+                    </div>
+                    <i data-lucide="chevron-right" class="landing-card-arrow"></i>
+                </button>
+
+                <button class="landing-card landing-card-ghost" id="btn-landing-demo">
+                    <div class="landing-card-icon">
+                        <i data-lucide="eye"></i>
+                    </div>
+                    <div class="landing-card-text">
+                        <strong>Default Template</strong>
+                        <span>Browse sample data (read-only)</span>
+                    </div>
+                    <i data-lucide="chevron-right" class="landing-card-arrow"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= MAIN APP (hidden until notebook initialized) ================= -->
+        <div id="main-app" style="display: none;">
+
+        <!-- Demo notice banner -->
+        <div id="demo-notice-banner" style="display: none; justify-content: space-between; align-items: center; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: var(--radius-md); padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.8125rem; color: #f59e0b; border-left: 4px solid #f59e0b;">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <i data-lucide="sparkles" style="width: 15px; height: 15px;"></i>
+                <div>
+                    <strong style="font-weight: 700;">Default Template (Read-Only)</strong>
+                    <p style="font-size: 0.72rem; opacity: 0.85; margin-top: 0.1rem;">Sample data only. Create a real notebook to start tracking.</p>
+                </div>
+            </div>
+            <button class="btn btn-sm" id="btn-banner-create-notebook" style="background: #f59e0b; border: none; color: #07080e; padding: 0.35rem 0.75rem; font-size: 0.75rem; font-weight: 700; border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;">
+                + New Notebook
             </button>
         </div>
 
@@ -163,7 +208,24 @@
                 </div>
             </div>
         </section>
-    </div>
+        </div> <!-- /#main-app -->
+    </div> <!-- /.container -->
+
+    <!-- ================= BOTTOM NAV ================= -->
+    <nav class="bottom-nav" id="bottom-nav" style="display: none;">
+        <button class="bottom-nav-btn active" id="tab-btn-ledger" data-tab="ledger">
+            <i data-lucide="wallet"></i>
+            <span>Ledger</span>
+        </button>
+        <button class="bottom-nav-btn" id="tab-btn-analytics" data-tab="analytics">
+            <i data-lucide="pie-chart"></i>
+            <span>Analytics</span>
+        </button>
+        <button class="bottom-nav-btn" id="tab-btn-roommates" data-tab="roommates">
+            <i data-lucide="users"></i>
+            <span>Roommates</span>
+        </button>
+    </nav>
 
     <!-- ================= TRANSACTION MODAL ================= -->
     <div class="modal-overlay" id="transaction-modal">
