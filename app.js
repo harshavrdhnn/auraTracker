@@ -696,6 +696,11 @@ function activeData() {
 }
 
 function renderAll() {
+    const keyEl = document.getElementById("header-aura-key");
+    if (keyEl) {
+        keyEl.textContent = isDemoMode ? "Demo" : (state.settings.syncKey || "-");
+    }
+
     // In demo mode, temporarily swap rendering refs so all child renders use sample data
     // without ever modifying the real state object
     const _roommates = state.roommates;
