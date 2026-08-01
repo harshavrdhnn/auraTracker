@@ -473,6 +473,26 @@ function initEventListeners() {
         });
     });
 
+    let isSignUpMode = false;
+    document.getElementById("link-toggle-auth-mode").addEventListener("click", (e) => {
+        e.preventDefault();
+        isSignUpMode = !isSignUpMode;
+        
+        const btn = document.getElementById("btn-email-submit");
+        const label = document.getElementById("auth-mode-label");
+        const link = document.getElementById("link-toggle-auth-mode");
+        
+        if (isSignUpMode) {
+            btn.textContent = "Create Account";
+            label.textContent = "Already have an account?";
+            link.textContent = "Sign In";
+        } else {
+            btn.textContent = "Sign In";
+            label.textContent = "Don't have an account?";
+            link.textContent = "Create Account";
+        }
+    });
+
     document.getElementById("email-auth-form").addEventListener("submit", (e) => {
         e.preventDefault();
         const email = document.getElementById("auth-email").value.trim();
@@ -483,29 +503,29 @@ function initEventListeners() {
             return;
         }
 
-        showToast("Authenticating email...", "success");
-        firebase.auth().signInWithEmailAndPassword(email, password)
-            .then(() => {
-                showToast("Logged in successfully!", "success");
-                if (isCreatorMode) showLoginStep("key");
-            })
-            .catch(err => {
-                // If user doesn't exist, automatically sign up
-                if (err.code === "auth/user-not-found") {
-                    firebase.auth().createUserWithEmailAndPassword(email, password)
-                        .then(() => {
-                            showToast("Account created successfully!", "success");
-                            if (isCreatorMode) showLoginStep("key");
-                        })
-                        .catch(signupErr => {
-                            console.error("Signup failed:", signupErr);
-                            showToast(signupErr.message, "error");
-                        });
-                } else {
+        if (isSignUpMode) {
+            showToast("Creating account...", "success");
+            firebase.auth().createUserWithEmailAndPassword(email, password)
+                .then(() => {
+                    showToast("Account created successfully!", "success");
+                    if (isCreatorMode) showLoginStep("key");
+                })
+                .catch(signupErr => {
+                    console.error("Signup failed:", signupErr);
+                    showToast(signupErr.message, "error");
+                });
+        } else {
+            showToast("Signing in...", "success");
+            firebase.auth().signInWithEmailAndPassword(email, password)
+                .then(() => {
+                    showToast("Logged in successfully!", "success");
+                    if (isCreatorMode) showLoginStep("key");
+                })
+                .catch(err => {
                     console.error("Login failed:", err);
                     showToast(err.message, "error");
-                }
-            });
+                });
+        }
     });
 
     document.getElementById("btn-auth-back").addEventListener("click", () => {

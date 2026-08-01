@@ -131,9 +131,13 @@
                             <label for="auth-password" style="font-size: 0.75rem;">Password</label>
                             <input type="password" class="form-control" id="auth-password" required placeholder="••••••••" minlength="6">
                         </div>
-                        <button type="submit" class="btn btn-secondary" style="height: 40px; font-weight: 700; width: 100%; border-color: var(--accent-primary); color: white;">
-                            Continue with Email
+                        <button type="submit" class="btn btn-secondary" id="btn-email-submit" style="height: 40px; font-weight: 700; width: 100%; border-color: var(--accent-primary); color: white;">
+                            Sign In
                         </button>
+                        <p style="text-align: center; font-size: 0.75rem; margin-top: 0.25rem; color: var(--text-muted);">
+                            <span id="auth-mode-label">Don't have an account?</span> 
+                            <a href="#" id="link-toggle-auth-mode" style="color: var(--accent-primary); font-weight: 600; text-decoration: underline;">Create Account</a>
+                        </p>
                     </form>
 
                     <button class="btn btn-link btn-xs" id="btn-auth-back" style="color: var(--text-secondary); background: transparent; border: none; font-size: 0.75rem; text-decoration: underline; cursor: pointer; align-self: center;">
