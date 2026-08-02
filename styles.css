@@ -468,9 +468,35 @@ header::before {
 /* Ledger List & Filters */
 .search-filter-bar {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
     gap: 0.75rem;
     margin-bottom: 1.25rem;
+}
+
+.participant-filter-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+    min-height: 2.6rem;
+}
+
+.participant-filter-chip-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.participant-filter-chip {
+    accent-color: var(--accent-primary);
+    cursor: pointer;
 }
 
 @media (max-width: 600px) {

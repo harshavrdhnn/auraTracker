@@ -25,6 +25,7 @@ let state = {
         search: "",
         payer: "all",
         category: "all",
+        participants: [],
         sort: "date-desc"
     }
 };
@@ -36,6 +37,10 @@ const ROOMMATE_PALETTE = ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#3b82f6",
 let firebaseApp = null;
 let firebaseDb = null;
 let firebaseSyncRef = null;
+
+// Chart state
+let payerChartInstance = null;
+let categoryChartInstance = null;
 
 // Auth Modes
 let isCreatorMode = false;
@@ -725,6 +730,13 @@ function initEventListeners() {
         state.filters.category = e.target.value;
         renderTransactionList();
     });
+    document.getElementById("participant-filter-chip-group").addEventListener("change", (e) => {
+        if (e.target.classList.contains("participant-filter-chip")) {
+            const selected = Array.from(document.querySelectorAll('.participant-filter-chip:checked')).map(option => option.value);
+            state.filters.participants = selected;
+            renderTransactionList();
+        }
+    });
     document.getElementById("sort-order").addEventListener("change", () => {
         renderTransactionList();
     });
@@ -863,8 +875,9 @@ function switchTab(tab) {
     } else {
         viewLedgerEl.style.display = "none";
         viewAnalyticsEl.style.display = "grid";
-        renderCharts();
     }
+
+    renderAll();
 
     // Update bottom nav active state
     document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
@@ -1165,6 +1178,7 @@ function renderTransactionList() {
     const query = state.filters.search.toLowerCase();
     const payerFilter = state.filters.payer;
     const catFilter = state.filters.category;
+    const participantFilter = (state.filters.participants || []).filter(Boolean);
 
     const filtered = state.transactions.filter(tx => {
         if (tx.deleted) return false;
@@ -1176,6 +1190,18 @@ function renderTransactionList() {
 
         // Category
         if (catFilter !== "all" && tx.category !== catFilter) return false;
+
+        if (participantFilter.length > 0) {
+            const participantNames = new Set();
+            if (tx.paidBy) participantNames.add(tx.paidBy);
+            if (tx.receiver) participantNames.add(tx.receiver);
+            if (tx.splits) {
+                Object.keys(tx.splits).forEach(name => participantNames.add(name));
+            }
+
+            const selectedMatch = participantFilter.some(name => participantNames.has(name));
+            if (!selectedMatch) return false;
+        }
 
         return true;
     });
@@ -1212,6 +1238,21 @@ function renderTransactionList() {
         catDropdown.appendChild(option);
     });
     catDropdown.value = currentSelectedCat;
+
+    const participantGroup = document.getElementById("participant-filter-chip-group");
+    const currentSelectedParticipants = state.filters.participants || [];
+    if (participantGroup) {
+        participantGroup.innerHTML = '';
+        state.roommates.forEach(rm => {
+            const chip = document.createElement("label");
+            chip.className = "participant-filter-chip-wrap";
+            chip.innerHTML = `
+                <input type="checkbox" class="participant-filter-chip" value="${rm.name}" ${currentSelectedParticipants.includes(rm.name) ? 'checked' : ''}>
+                <span>${rm.name}</span>
+            `;
+            participantGroup.appendChild(chip);
+        });
+    }
 
     if (filtered.length === 0) {
         container.innerHTML = `
@@ -2433,7 +2474,6 @@ function renderCharts() {
 
     if (!payerCanvas || !categoryCanvas) return;
 
-    // Destroy existing instances if present
     if (payerChartInstance) {
         payerChartInstance.destroy();
     }
@@ -2441,10 +2481,12 @@ function renderCharts() {
         categoryChartInstance.destroy();
     }
 
-    // Check if there are transactions
-    const totalTx = state.transactions.filter(t => t.type === "expense");
-    if (totalTx.length === 0) {
-        // Draw empty placeholders inside parent containers
+    const dataSource = isDemoMode ? demoState : state;
+    const analytics = (typeof AuraAnalytics !== 'undefined' && AuraAnalytics.buildAnalyticsData)
+        ? AuraAnalytics.buildAnalyticsData(dataSource)
+        : null;
+
+    if (!analytics || !analytics.hasData) {
         payerCanvas.style.display = "none";
         categoryCanvas.style.display = "none";
         return;
@@ -2453,31 +2495,14 @@ function renderCharts() {
     payerCanvas.style.display = "block";
     categoryCanvas.style.display = "block";
 
-    // 1. Payer totals spent
-    let payerLabels = state.roommates.map(r => r.name);
-    let payerColors = state.roommates.map(r => r.color);
-    let payerDataMap = {};
-    
-    state.roommates.forEach(r => {
-        payerDataMap[r.name] = 0;
-    });
-
-    totalTx.forEach(tx => {
-        if (payerDataMap.hasOwnProperty(tx.paidBy)) {
-            payerDataMap[tx.paidBy] += parseFloat(tx.amount) || 0;
-        }
-    });
-
-    let payerDatasetValues = state.roommates.map(r => payerDataMap[r.name]);
-
     payerChartInstance = new Chart(payerCanvas.getContext("2d"), {
         type: 'bar',
         data: {
-            labels: payerLabels,
+            labels: analytics.payerLabels,
             datasets: [{
                 label: 'Total Paid (₹)',
-                data: payerDatasetValues,
-                backgroundColor: payerColors,
+                data: analytics.payerValues,
+                backgroundColor: analytics.payerColors,
                 borderColor: 'rgba(255,255,255,0.1)',
                 borderWidth: 1,
                 borderRadius: 8
@@ -2509,49 +2534,13 @@ function renderCharts() {
         }
     });
 
-    // 2. Category totals spent
-    let categoryMap = {
-        Rent: 0,
-        Groceries: 0,
-        Utilities: 0,
-        "Dine Out": 0,
-        Travel: 0,
-        Misc: 0
-    };
-
-    totalTx.forEach(tx => {
-        const cat = tx.category || "Misc";
-        categoryMap[cat] = (categoryMap[cat] || 0) + (parseFloat(tx.amount) || 0);
-    });
-
-    // Filter out zero categories
-    let catLabels = [];
-    let catValues = [];
-    const categoryColors = {
-        Rent: "#3b82f6",
-        Groceries: "#10b981",
-        Utilities: "#f59e0b",
-        "Dine Out": "#ef4444",
-        Travel: "#8b5cf6",
-        Misc: "#6b7280"
-    };
-    let catColors = [];
-
-    for (let cat in categoryMap) {
-        if (categoryMap[cat] > 0.01) {
-            catLabels.push(cat);
-            catValues.push(categoryMap[cat]);
-            catColors.push(categoryColors[cat] || "#6b7280");
-        }
-    }
-
     categoryChartInstance = new Chart(categoryCanvas.getContext("2d"), {
         type: 'doughnut',
         data: {
-            labels: catLabels,
+            labels: analytics.categoryLabels,
             datasets: [{
-                data: catValues,
-                backgroundColor: catColors,
+                data: analytics.categoryValues,
+                backgroundColor: analytics.categoryColors,
                 borderColor: 'rgba(0,0,0,0.5)',
                 borderWidth: 2
             }]
