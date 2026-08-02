@@ -243,7 +243,7 @@ function pushToFirebase() {
 function checkAuraKeyExists(key) {
     try {
         if (typeof firebase === 'undefined') {
-            return Promise.resolve(false);
+            return Promise.reject(new Error("Firebase SDK not loaded"));
         }
         const app = firebaseApp || (firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG));
         const db = firebase.database(app);
@@ -252,7 +252,7 @@ function checkAuraKeyExists(key) {
         });
     } catch (e) {
         console.error("Firebase key lookup check failed:", e);
-        return Promise.resolve(false);
+        return Promise.reject(e);
     }
 }
 
@@ -585,7 +585,7 @@ function initEventListeners() {
                 }
             }).catch(e => {
                 feedback.className = "invalid";
-                feedback.textContent = "Connection check failed. Try again.";
+                feedback.textContent = `❌ Error: ${e.message || "Connection failed"}. Check connection or console.`;
             });
         }, 600);
     });
