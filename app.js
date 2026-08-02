@@ -1182,8 +1182,28 @@ function renderTransactionList() {
 
     const filtered = state.transactions.filter(tx => {
         if (tx.deleted) return false;
-        // Search description
-        if (query && !tx.description.toLowerCase().includes(query)) return false;
+
+        const searchableText = [
+            tx.description,
+            tx.category,
+            tx.paidBy,
+            tx.receiver,
+            tx.type,
+            tx.id,
+            tx.notes,
+            tx.comment,
+            tx.paymentMethod,
+            tx.splitType,
+            tx.amount,
+            tx.date,
+            ...(tx.splits ? Object.keys(tx.splits) : []),
+            ...(tx.splits ? Object.values(tx.splits).map(String) : [])
+        ]
+            .filter(value => value !== undefined && value !== null && value !== '')
+            .join(' ')
+            .toLowerCase();
+
+        if (query && !searchableText.includes(query)) return false;
         
         // Payer
         if (payerFilter !== "all" && tx.paidBy !== payerFilter) return false;
