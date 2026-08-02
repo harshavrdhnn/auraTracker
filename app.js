@@ -670,6 +670,30 @@ function initEventListeners() {
         }
     });
 
+    document.getElementById("btn-settings-disconnect").addEventListener("click", () => {
+        if (confirm("Are you sure you want to disconnect from this notebook? This will clear your local workspace cache.")) {
+            localStorage.clear();
+            location.reload();
+        }
+    });
+
+    document.getElementById("btn-header-logout").addEventListener("click", () => {
+        if (confirm("Are you sure you want to sign out and disconnect from this notebook? This will clear your local session cache.")) {
+            if (typeof firebase !== 'undefined' && firebase.auth) {
+                firebase.auth().signOut().then(() => {
+                    localStorage.clear();
+                    location.reload();
+                }).catch(() => {
+                    localStorage.clear();
+                    location.reload();
+                });
+            } else {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+    });
+
     // Onboarding Wizard
     document.getElementById("btn-add-roommate-row").addEventListener("click", () => addRoommateWizardRow("onboarding-roommates-list"));
     document.getElementById("onboarding-form").addEventListener("submit", handleSaveOnboarding);
