@@ -1192,15 +1192,28 @@ function renderTransactionList() {
         if (catFilter !== "all" && tx.category !== catFilter) return false;
 
         if (participantFilter.length > 0) {
-            const participantNames = new Set();
-            if (tx.paidBy) participantNames.add(tx.paidBy);
-            if (tx.receiver) participantNames.add(tx.receiver);
-            if (tx.splits) {
-                Object.keys(tx.splits).forEach(name => participantNames.add(name));
+            let matchesFilter = false;
+
+            if (typeof window !== 'undefined' && window.transactionFilter && typeof window.transactionFilter.matchesStrictParticipantFilter === 'function') {
+                matchesFilter = window.transactionFilter.matchesStrictParticipantFilter(tx, participantFilter);
+            } else {
+                const txParticipants = [];
+                if (tx.paidBy) txParticipants.push(tx.paidBy);
+                if (tx.receiver) txParticipants.push(tx.receiver);
+                if (tx.splits) {
+                    Object.keys(tx.splits).forEach(name => {
+                        if (name && !txParticipants.includes(name)) txParticipants.push(name);
+                    });
+                }
+
+                const normalizedTxParticipants = [...new Set(txParticipants)].sort();
+                const normalizedSelectedParticipants = [...new Set(participantFilter)].sort();
+                const participantCountMatches = normalizedTxParticipants.length === normalizedSelectedParticipants.length;
+                const selectedParticipantsMatch = normalizedTxParticipants.every(name => normalizedSelectedParticipants.includes(name));
+                matchesFilter = participantCountMatches && selectedParticipantsMatch;
             }
 
-            const selectedMatch = participantFilter.some(name => participantNames.has(name));
-            if (!selectedMatch) return false;
+            if (!matchesFilter) return false;
         }
 
         return true;
